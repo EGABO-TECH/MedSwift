@@ -1,7 +1,7 @@
 # MedSwift: Scan the Truth. Secure Your Health.
 
 <p align="center">
-  <img src="MedSwift-Logo.jpg" alt="MedSwift Logo" width="400">
+  <img src="./Assets/MedSwift-Logo.png" alt="MedSwift Logo" width="400">
 </p>
 
 **MedSwift** is a high-performance **Progressive Web App (PWA)** engineered to combat the global crisis of counterfeit pharmaceuticals through real-time, decentralized verification. Designed specifically for the **Ugandan logistics and healthcare market**, it serves as a secure bridge between global manufacturers and local consumers.
