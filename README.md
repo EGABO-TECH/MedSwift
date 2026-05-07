@@ -53,5 +53,5 @@ To get a local copy of MedSwift up and running, follow these steps:
 
 ---
 
-### **Developed by [RENOA](https://www.linkedin.com/company/RENOA)**
+### **Developed by [RENOA](https://www.linkedin.com/company/renoa-collective/)**
 *Advancing Pharmaceutical Integrity through Digital Innovation.*
