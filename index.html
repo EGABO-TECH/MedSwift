@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MedSwift</title>
+  <meta name="description" content="Offline-first PWA verifying pharmaceutical authenticity." />
+  <meta name="theme-color" content="#FDFBF7" />
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+
+  <!-- Custom Semantic CSS (Replaces Tailwind) -->
+  <link rel="stylesheet" href="css/style.css" />
+
+  <!-- External Libs -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
+  <script src="https://unpkg.com/@zxing/library@latest"></script>
+</head>
+
+<body class="grid-texture">
+
+  <!-- Navigation -->
+  <nav id="navbar" class="site-header">
+    <div class="container nav-container">
+      <a href="index.html" class="nav-brand">
+        <img src="Assets/MedSwift-Symbol.png" alt="MedSwift Symbol" class="brand-image" />
+        <span class="brand-text">MedSwift</span>
+      </a>
+      <a href="contact.html" id="contact-nav-btn" class="btn-contact-nav">
+        <i data-lucide="mail"></i>
+        <span>Contact Us</span>
+      </a>
+    </div>
+  </nav>
+
+  <!-- Ambient Glows -->
+  <div class="bg-glow"></div>
+  <div class="bg-glow-left"></div>
+
+  <!-- Main Content -->
+  <main class="app-main">
+    <div class="container app-grid">
+
+      <!-- Left: Information & Audit -->
+      <div class="app-info">
+        <h1 class="hero-title">
+          Scan the Truth.<br />
+          <span class="text-gradient">Secure Your Health.</span>
+        </h1>
+        <p class="hero-subtitle">
+          Instant offline-first verification of pharmaceutical authenticity, origin, and dosage instructions.
+        </p>
+
+        <!-- Trust Score -->
+        <div class="trust-panel">
+          <div class="trust-icon"><i data-lucide="shield-check"></i></div>
+          <div class="trust-info">
+            <div class="trust-header">
+              <span id="trust-score-val" class="trust-score">System Ready</span>
+              <span class="trust-badge">Protected</span>
+            </div>
+            <p class="trust-desc">Leveraging decentralized ledgers and openFDA to guarantee drug safety, origin, and
+              proper dosage before consumption.</p>
+          </div>
+        </div>
+
+        <!-- Audit Trail -->
+        <div class="audit-panel">
+          <div class="audit-title">Recent Scans</div>
+          <div id="audit-trail-list" class="audit-list">
+            <div
+              style="padding: 16px; text-align: center; color: rgba(255,255,255,0.3); font-size: 12px; font-weight: 500;">
+              No scans yet. Point your camera at a 2D barcode to begin.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Scanner Interface -->
+      <div class="app-scanner">
+        <div class="scanner-device">
+          <div class="scanner-screen">
+
+            <div class="scanner-video-container">
+              <video id="scanner-video" class="scanner-video" playsinline muted></video>
+              <img id="scanner-placeholder" class="scanner-placeholder"
+                src="https://picsum.photos/seed/medbottle-scan/600/1200" alt="Camera Placeholder" />
+              <div class="scanner-overlay"></div>
+            </div>
+
+            <!-- Alignment Corners -->
+            <div class="scan-corner tl"></div>
+            <div class="scan-corner tr"></div>
+            <div class="scan-corner bl"></div>
+            <div class="scan-corner br"></div>
+
+            <!-- Scanning Animations -->
+            <div id="scanner-beam" class="scanner-beam hidden"></div>
+            <div id="holo-shimmer" class="holo-shimmer hidden"
+              style="position: absolute; inset: 0; z-index: 10; pointer-events: none;"></div>
+
+            <div class="scanner-topbar">
+              <div class="scanner-brand">
+                <div class="scanner-brand-icon"><i data-lucide="scan-line"></i></div>
+                <span class="scanner-brand-text">LIVE FEED</span>
+              </div>
+              <div class="scanner-status">
+                <i id="scan-status-icon" data-lucide="zap"
+                  style="width: 14px; height: 14px; color: var(--purple-glow);"></i>
+              </div>
+            </div>
+
+            <div id="scanner-prompt" class="scanner-prompt">
+              <div class="prompt-icon"><i data-lucide="camera"></i></div>
+              <p class="prompt-text">Align Barcode</p>
+            </div>
+
+            <!-- Scan Result Card -->
+            <div id="scan-result-card" class="result-card hidden">
+              <div class="result-header">
+                <div class="result-status">
+                  <div id="result-icon-bg" class="result-icon-box">
+                    <i id="result-icon" data-lucide="check" style="width: 14px; height: 14px;"></i>
+                  </div>
+                  <span id="result-title" class="result-title">Authentic</span>
+                </div>
+                <button id="dismiss-scan" class="result-close"><i data-lucide="x"
+                    style="width: 16px; height: 16px;"></i></button>
+              </div>
+
+              <div class="result-data" id="result-data-rows"></div>
+
+              <div class="result-details" id="result-details-box"></div>
+            </div>
+
+            <!-- Scanner Controls -->
+            <div class="scanner-controls-bar" id="scanner-controls">
+              <button id="btn-start-scan" class="btn btn-accent btn-scan-live">
+                <i data-lucide="camera"></i> Start Camera
+              </button>
+              <button id="btn-demo-scan" class="btn btn-ghost btn-scan-demo">
+                <i data-lucide="shield"></i> Demo
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Modules -->
+  <script type="module" src="js/state.js"></script>
+  <script type="module" src="js/db.js"></script>
+  <script type="module" src="js/scanner.js"></script>
+  <script type="module" src="js/app.js"></script>
+
+  <script>
+    lucide.createIcons();
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW setup failed', err));
+      });
+    }
+  </script>
+</body>
+
+</html>

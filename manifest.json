@@ -1,0 +1,16 @@
+{
+  "name": "MedSwift — Pharmaceutical Integrity Platform",
+  "short_name": "MedSwift",
+  "description": "Scan the Truth. Secure Your Health.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#FDFBF7",
+  "theme_color": "#0D9488",
+  "icons": [
+    {
+      "src": "https://z-cdn-media.chatglm.cn/files/61026284-e027-4d41-a9b3-3765a1e01aef.png?auth_key=1878169347-c72384ede6de40969f09df44786b6285-0-3888fd1a13b5ae8c3470ecd52441d72c",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

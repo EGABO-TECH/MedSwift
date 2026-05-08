@@ -1,0 +1,54 @@
+[
+  {
+    "gtin": "00380777055124",
+    "ndc": "0085-0066",
+    "rxnormId": "1049221",
+    "brandName": "Amoxicillin",
+    "genericName": "Amoxicillin 500mg Capsule",
+    "manufacturer": "Roche AG",
+    "dosageForm": "Oral Capsule",
+    "dosageInstructions": "Take one capsule every 8 hours for 10 days as directed.",
+    "warnings": "Contraindicated in patients with penicillin allergy. May cause gastrointestinal upset.",
+    "isEssentialMedicine": true,
+    "origin": "Verified US/EU Manufacturing"
+  },
+  {
+    "gtin": "00369715002715",
+    "ndc": "0069-0153",
+    "rxnormId": "861004",
+    "brandName": "Metformin HCl",
+    "genericName": "Metformin Hydrochloride 850mg",
+    "manufacturer": "Sun Pharma",
+    "dosageForm": "Oral Tablet",
+    "dosageInstructions": "Take one tablet twice daily with meals. Max dose 2550mg/day.",
+    "warnings": "Risk of lactic acidosis. Monitor renal function.",
+    "isEssentialMedicine": true,
+    "origin": "Verified International Manufacturing"
+  },
+  {
+    "gtin": "00300450449108",
+    "ndc": "0045-0449",
+    "rxnormId": "198031",
+    "brandName": "Tylenol",
+    "genericName": "Acetaminophen 500mg",
+    "manufacturer": "McNeil Consumer Healthcare",
+    "dosageForm": "Oral Tablet",
+    "dosageInstructions": "Take 2 tablets every 6 hours as needed for pain. Do not exceed 8 tablets in 24 hours.",
+    "warnings": "Severe liver damage may occur if you take more than 4,000 mg in 24 hours.",
+    "isEssentialMedicine": true,
+    "origin": "Verified US Manufacturing"
+  },
+  {
+    "gtin": "00301730363028",
+    "ndc": "0173-0363",
+    "rxnormId": "1151126",
+    "brandName": "Ventolin HFA",
+    "genericName": "Albuterol Sulfate Inhalation Aerosol",
+    "manufacturer": "GlaxoSmithKline",
+    "dosageForm": "Inhaler",
+    "dosageInstructions": "2 inhalations every 4 to 6 hours as needed.",
+    "warnings": "Paradoxical bronchospasm may occur. Monitor for cardiovascular effects.",
+    "isEssentialMedicine": true,
+    "origin": "Verified UK Manufacturing"
+  }
+]
