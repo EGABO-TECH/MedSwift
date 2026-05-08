@@ -604,6 +604,92 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   margin-bottom: 8px;
 }
 
+/* ──────────── TICKER BANNER ──────────── */
+.ticker-wrap {
+  width: 100%;
+  overflow: hidden;
+  background: var(--obsidian-deep);
+  border-top: 1px solid var(--purple-refract);
+  border-bottom: 1px solid var(--purple-refract);
+  padding: 12px 0;
+  display: flex;
+}
+.ticker-content {
+  display: flex;
+  white-space: nowrap;
+  animation: ticker 30s linear infinite;
+}
+.ticker-item {
+  display: flex;
+  align-items: center;
+  padding: 0 40px;
+  color: var(--pure-white);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.ticker-item i {
+  margin-right: 12px;
+  color: var(--purple-glow);
+}
+.ticker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--teal-primary);
+  margin: 0 20px;
+}
+
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ──────────── SIDEBAR METRICS ──────────── */
+.sidebar-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.sidebar-metric-card {
+  background: var(--pure-white);
+  border: 1px solid var(--cream-border);
+  padding: 16px;
+  border-radius: 16px;
+  text-align: left;
+  transition: all 0.3s ease;
+}
+.sidebar-metric-card:hover {
+  border-color: var(--teal-primary);
+  background: var(--teal-ultra-light);
+}
+.sidebar-metric-value {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--teal-deep);
+  margin-bottom: 4px;
+}
+.sidebar-metric-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.sidebar-metric-card i {
+  color: var(--teal-primary);
+  margin-bottom: 8px;
+  display: block;
+  opacity: 0.7;
+}
+
+
+
+
 
 /* ──────────── ANIMATIONS ──────────── */
 .scanner-beam {
