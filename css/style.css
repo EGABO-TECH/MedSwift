@@ -687,6 +687,33 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   opacity: 0.7;
 }
 
+/* ──────────── FORM ACTIONS DUAL ──────────── */
+.form-actions-dual {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+.btn-dual {
+  flex: 1;
+  justify-content: center;
+  padding: 14px !important;
+  font-size: 13px !important;
+}
+.btn-whatsapp-alt {
+  border-color: #25D366 !important;
+  color: #25D366 !important;
+}
+.btn-whatsapp-alt:hover {
+  background: rgba(37, 211, 102, 0.05) !important;
+}
+
+@media (max-width: 480px) {
+  .form-actions-dual {
+    flex-direction: column;
+  }
+}
+
+
 
 
 

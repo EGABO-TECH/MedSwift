@@ -9,6 +9,7 @@
     content="Get in touch with MedSwift for pharmaceutical verification solutions and enterprise product inquiries." />
   <meta name="theme-color" content="#FDFBF7" />
   <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="Assets/MedSwift-Symbol.png" />
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -109,7 +110,7 @@
             </div>
           </div>
 
-          <form id="contact-form" class="contact-form" action="https://formspree.io/aaronegabo@gmail.com"
+          <form id="contact-form" class="contact-form" action="https://formspree.io/f/xjglagaz"
             method="POST" novalidate>
             <input type="hidden" name="_subject" value="New MedSwift Enterprise Inquiry">
             <div class="form-group">
@@ -164,10 +165,16 @@
               </div>
             </div>
 
-            <button type="submit" id="contact-submit" class="btn btn-accent btn-submit">
-              <i data-lucide="send"></i>
-              <span>Send Message</span>
-            </button>
+            <div class="form-actions-dual">
+              <button type="button" id="submit-email" class="btn btn-accent btn-dual">
+                <i data-lucide="mail"></i>
+                <span>Send via Email</span>
+              </button>
+              <button type="button" id="submit-whatsapp" class="btn btn-ghost btn-dual btn-whatsapp-alt">
+                <i data-lucide="message-circle"></i>
+                <span>Chat on WhatsApp</span>
+              </button>
+            </div>
           </form>
 
           <!-- Success State -->
@@ -194,12 +201,14 @@
 
     // ─── FORM LOGIC ───
     const form = document.getElementById('contact-form');
-    const submitBtn = document.getElementById('contact-submit');
+    const submitEmailBtn = document.getElementById('submit-email');
+    const submitWhatsappBtn = document.getElementById('submit-whatsapp');
     const successPanel = document.getElementById('form-success');
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
+    submitEmailBtn.addEventListener('click', () => handleSubmit('email'));
+    submitWhatsappBtn.addEventListener('click', () => handleSubmit('whatsapp'));
 
+    async function handleSubmit(method) {
       // Basic validation
       const inputs = form.querySelectorAll('.form-input');
       let valid = true;
@@ -220,55 +229,59 @@
       // Collection of data for formatting
       const { name, email, company, interest, message } = formData;
 
-      // 1. Prepare WhatsApp Message
-      const whatsappNumber = "256772270027";
-      const whatsappMsg = `*New MedSwift Inquiry*%0A%0A` +
-        `*Name:* ${name}%0A` +
-        `*Email:* ${email}%0A` +
-        `*Company:* ${company}%0A` +
-        `*Interest:* ${interest}%0A` +
-        `*Message:* ${message}`;
+      if (method === 'whatsapp') {
+        const whatsappNumber = "256772270027";
+        const whatsappMsg = `*New MedSwift Inquiry*%0A%0A` +
+          `*Name:* ${name}%0A` +
+          `*Email:* ${email}%0A` +
+          `*Company:* ${company}%0A` +
+          `*Interest:* ${interest}%0A` +
+          `*Message:* ${message}`;
 
-      const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMsg}`;
-
-      // 2. Submit to Email (Formspree)
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span class="btn-spinner"></span> Sending...';
-
-      try {
-        // Convert FormData to a plain object for JSON submission
-        const data = {};
-        new FormData(form).forEach((value, key) => { data[key] = value });
-
-        const response = await fetch(form.action, {
-          method: "POST",
-          body: JSON.stringify(data),
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error('Formspree submission failed');
-        }
-
-        // Open WhatsApp in new tab
+        const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMsg}`;
         window.open(whatsappUrl, '_blank');
-
+        
         // Show success
         form.classList.add('hidden');
         successPanel.classList.remove('hidden');
         successPanel.classList.add('slide-up');
+      } else {
+        // Email Submission
+        submitEmailBtn.disabled = true;
+        submitEmailBtn.innerHTML = '<span class="btn-spinner"></span> Sending...';
 
-      } catch (error) {
-        console.error("Submission error:", error);
-        // Fallback: Still open WhatsApp even if email fetch fails
-        window.open(whatsappUrl, '_blank');
-        form.classList.add('hidden');
-        successPanel.classList.remove('hidden');
+        try {
+          // JSON submission for dedicated Form ID endpoint
+          const data = {};
+          new FormData(form).forEach((value, key) => { data[key] = value });
+
+          const response = await fetch(form.action, {
+            method: "POST",
+            body: JSON.stringify(data),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            }
+          });
+
+          if (!response.ok) throw new Error('Submission failed');
+
+          // Show success only if response is OK
+          form.classList.add('hidden');
+          successPanel.classList.remove('hidden');
+          successPanel.classList.add('slide-up');
+
+        } catch (error) {
+          console.error("Submission error:", error);
+          alert("We encountered an issue sending your email. Please try again or use the WhatsApp option for an instant response.");
+          
+          // Reset button
+          submitEmailBtn.disabled = false;
+          submitEmailBtn.innerHTML = '<i data-lucide="mail"></i> <span>Send via Email</span>';
+          lucide.createIcons();
+        }
       }
-    });
+    }
 
     // Live validation clear
     document.querySelectorAll('.form-input').forEach(input => {
