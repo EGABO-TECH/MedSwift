@@ -36,7 +36,7 @@
 *   **Backend**: Node.js Serverless Functions (Vercel Edge).
 *   **Persistence**: Dexie.js (IndexedDB wrapper) for high-performance client-side storage.
 *   **Iconography**: Lucide Icons for high-fidelity medical UI elements.
-*   **Design System**: "Teal Cream" & "Obsidian Purple" high-contrast accessibility theme.
+*   **Design System**: "Noir" Obsidian & Teal high-contrast medical interface.
 
 ---
 
@@ -56,6 +56,16 @@
     *   Set the `GEMINI_API_KEY` in your Vercel Project Settings > Environment Variables.
 3.  **Local Access**:
     *   Open `index.html` via a local server (e.g., Live Server) to interact with the UI. Note: AI vision requires the Vercel backend to be live.
+
+##  Architecture & Governance
+*   **Security Protocol**: All AI processing is proxied through a serverless backend to prevent client-side key exposure.
+*   **Data Integrity**: Local caching uses the Dexie-based visual vault to ensure functionality in zero-connectivity environments.
+*   **Governance**: Engineered under the Renoa Collective standards for pharmaceutical digital transparency.
+
+---
+
+##  License
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ---
 
