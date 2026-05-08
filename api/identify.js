@@ -10,8 +10,17 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Gemini API Key not configured in Vercel' });
   }
 
-  const prompt = "Identify this medication. Extract: [Drug Name], [Manufacturer/Origin], [Indication/Disease], [Dosage Form], and [Expiry Pattern]. Cross-reference with openFDA standards. Return as JSON with fields: drugName, manufacturer, indication, dosageForm, expiryPattern, confidenceScore (0-100), and originVerified (boolean).";
+  const prompt = `You are an advanced pharmaceutical verification AI. Identify the medication in the provided image by heavily leveraging your knowledge of global medical databases (openFDA, DailyMed, RxNorm, DrugBank, ChEMBL) and Google's database.
 
+Extract and provide highly accurate information for:
+1. Drug Name: Brand and generic.
+2. Manufacturer/Origin: Verified manufacturer.
+3. Indication/Disease: Specific diseases/disorders it cures or treats.
+4. Dosage Prescriptions: Standard dosage forms and guidelines.
+5. Expiry Pattern: Standard shelf-life.
+
+Return ONLY a strictly formatted JSON object (without markdown blocks) with the following exact keys:
+"drugName", "manufacturer", "indication", "dosageForm", "expiryPattern", "confidenceScore" (number 0-100), and "originVerified" (boolean, true if it matches known global databases).`;
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: "POST",
@@ -22,8 +31,19 @@ export default async function handler(req, res) {
             { text: prompt },
             { inline_data: { mime_type: "image/jpeg", data: image } }
           ]
-        }]
+        }],
+        tools: [
+          {
+            googleSearchRetrieval: {
+              dynamicRetrievalConfig: {
+                mode: "MODE_DYNAMIC",
+                dynamicThreshold: 0.3
+              }
+            }
+          }
+        ]
       })
+
     });
 
     const data = await response.json();
