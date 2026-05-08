@@ -3,10 +3,11 @@
  */
 export const db = new Dexie('medswift-vanilla-v2');
 
-db.version(2).stores({
+db.version(3).stores({
   medicationBatch: '++id, gtin, lot, serial, [gtin+lot+serial]',
   chainOfCustodyNodes: '++id, batchId, timestamp, [batchId+timestamp]',
-  referenceData: 'gtin, ndc, rxnormId, brandName'
+  referenceData: 'gtin, ndc, rxnormId, brandName',
+  visualCache: 'imageHash, drugName'
 });
 
 export async function seedDemoData() {

@@ -1,61 +1,99 @@
-import { findBatchByGTIN, getReferenceData } from './db.js';
+import { GEMINI_API_KEY } from './config.js';
 
-export function parseGS1(rawData) {
-  const result = {};
-  const aiPatterns = {
-    gtin:   /(?:\(01\)|^01)(\d{14})/,
-    lot:    /(?:\(10\)|10)([A-Z0-9\-]{1,20})/i,
-    serial: /(?:\(21\)|21)([A-Z0-9\-]{1,20})/i
-  };
-
-  for (const [key, pattern] of Object.entries(aiPatterns)) {
-    const match = rawData.match(pattern);
-    if (match) result[key] = match[1];
-  }
-  if (!result.gtin && /^\d{14}$/.test(rawData.trim())) result.gtin = rawData.trim();
-  return result;
-}
-
-export async function verifyScannedCode(rawData) {
+export async function identifyMedication(base64Image, signal) {
   const startTime = performance.now();
-  const gs1 = parseGS1(rawData);
 
-  if (!gs1.gtin) {
-    return { authentic: false, rawData, verifyMs: Math.round(performance.now() - startTime) };
+  // 1. Check Local Cache (Visual Signature Simulation)
+  // In a production app, we would generate a robust image hash.
+  // For this PWA, we simulate a 'visual signature' match.
+  const cached = await checkLocalVisualCache(base64Image);
+  if (cached) {
+    return { ...cached, cached: true, verifyMs: Math.round(performance.now() - startTime) };
   }
 
-  // 1. Check local offline reference data (RxNorm/openFDA subset)
-  const referenceData = await getReferenceData(gs1.gtin);
-  
-  // 2. Check internal medication batch tracking
-  const batch = await findBatchByGTIN(gs1.gtin, gs1.lot);
-  
-  const isAuthentic = !!batch && !!referenceData;
+  // 2. Gemini 1.5 Flash Vision Pipeline
+  const prompt = "Identify this medication. Extract: [Drug Name], [Manufacturer/Origin], [Indication/Disease], [Dosage Form], and [Expiry Pattern]. Cross-reference with openFDA standards. Return as JSON with fields: drugName, manufacturer, indication, dosageForm, expiryPattern, confidenceScore (0-100), and originVerified (boolean).";
 
-  return {
-    authentic: isAuthentic,
-    gs1,
-    batch,
-    fdaEnrichment: referenceData,
-    timestamp: new Date().toISOString(),
-    verifyMs: Math.round(performance.now() - startTime)
-  };
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal,
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: "image/jpeg", data: base64Image.split(',')[1] } }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    const resultText = data.candidates[0].content.parts[0].text;
+    const visionResult = JSON.parse(resultText.replace(/```json|```/g, ''));
+
+    // 3. Validation Layer (RxNorm Cross-Reference)
+    const isValidated = await validateWithRxNorm(visionResult.drugName);
+
+    const finalResult = {
+      ...visionResult,
+      authentic: visionResult.confidenceScore >= 85 && isValidated,
+      manualReviewRequired: visionResult.confidenceScore < 85,
+      verifyMs: Math.round(performance.now() - startTime),
+      timestamp: new Date().toISOString()
+    };
+
+    // Cache for offline use
+    if (finalResult.confidenceScore >= 95) {
+      await cacheVisualSignature(base64Image, finalResult);
+    }
+
+    return finalResult;
+  } catch (err) {
+    if (err.name === 'AbortError') throw err; // Propagate abort to app.js
+    console.error("Vision Pipeline Error:", err);
+    return { error: "MedSwift Vision Unavailable", authentic: false };
+  }
 }
 
-export async function startCamera(videoEl, onResult) {
-  const reader = new ZXing.BrowserMultiFormatReader();
+async function validateWithRxNorm(drugName) {
+  // Mocking RxNorm validation against our local Dexie referenceData
+  const Dexie = (await import('./db.js')).db;
+  const match = await Dexie.referenceData.where('brandName').equalsIgnoreCase(drugName).first();
+  return !!match;
+}
+
+async function checkLocalVisualCache(image) {
+  // Simplified: In a real app, use a perceptual hash
+  return null;
+}
+
+async function cacheVisualSignature(image, result) {
+  const Dexie = (await import('./db.js')).db;
+  await Dexie.visualCache.put({ imageHash: 'simulated_hash', ...result });
+}
+
+export async function captureFrame(videoEl) {
+  const canvas = document.createElement('canvas');
+  canvas.width = videoEl.videoWidth;
+  canvas.height = videoEl.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(videoEl, 0, 0);
+  return canvas.toDataURL('image/jpeg', 0.8);
+}
+
+export async function startCamera(videoEl) {
   try {
-    const devices = await reader.listVideoInputDevices();
-    const backCamera = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
-    
-    if (!backCamera) throw new Error('No camera');
-    
-    await reader.decodeFromVideoDevice(backCamera.deviceId, videoEl, (result) => {
-      if (result) onResult(result.getText());
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' }
     });
-    return reader;
+    videoEl.srcObject = stream;
+    await videoEl.play();
+    return stream;
   } catch (err) {
-    console.error(err);
+    console.error("Camera Access Error:", err);
     return null;
   }
 }
+

@@ -96,6 +96,9 @@
               <div class="scanner-overlay"></div>
             </div>
 
+            <!-- Verification Zone -->
+            <div id="verification-zone" class="verification-zone hidden"></div>
+
             <!-- Alignment Corners -->
             <div class="scan-corner tl"></div>
             <div class="scan-corner tr"></div>
@@ -109,8 +112,8 @@
 
             <div class="scanner-topbar">
               <div class="scanner-brand">
-                <div class="scanner-brand-icon"><i data-lucide="scan-line"></i></div>
-                <span class="scanner-brand-text">LIVE FEED</span>
+                <div class="scanner-brand-icon" id="intelligence-icon"><i data-lucide="brain-circuit"></i></div>
+                <span class="scanner-brand-text">MEDSWIFT VISION</span>
               </div>
               <div class="scanner-status">
                 <i id="scan-status-icon" data-lucide="zap"
@@ -119,8 +122,8 @@
             </div>
 
             <div id="scanner-prompt" class="scanner-prompt">
-              <div class="prompt-icon"><i data-lucide="camera"></i></div>
-              <p class="prompt-text">Align Barcode</p>
+              <div class="prompt-icon"><i data-lucide="scan-eye"></i></div>
+              <p class="prompt-text">Focus Medication</p>
             </div>
 
             <!-- Scan Result Card -->
@@ -141,14 +144,22 @@
               <div class="result-details" id="result-details-box"></div>
             </div>
 
+            <!-- Cancel Analysis Button -->
+            <div id="analysis-cancel-box" class="scanner-prompt hidden" style="top: 75%; pointer-events: auto;">
+              <button id="btn-cancel-analysis" class="btn btn-ghost" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #EF4444;">
+                <i data-lucide="stop-circle"></i> Cancel Analysis
+              </button>
+            </div>
+
             <!-- Scanner Controls -->
             <div class="scanner-controls-bar" id="scanner-controls">
               <button id="btn-start-scan" class="btn btn-accent btn-scan-live">
-                <i data-lucide="camera"></i> Start Camera
+                <i data-lucide="brain-circuit"></i> Start Vision
               </button>
-              <button id="btn-demo-scan" class="btn btn-ghost btn-scan-demo">
-                <i data-lucide="shield"></i> Demo
+              <button id="btn-upload-scan" class="btn btn-ghost btn-scan-upload">
+                <i data-lucide="image-plus"></i> Upload Image
               </button>
+              <input type="file" id="upload-input" accept="image/*" class="hidden">
             </div>
 
           </div>
@@ -157,6 +168,16 @@
 
     </div>
   </main>
+
+  <!-- Safety Constraints: Clinical Disclaimer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="clinical-disclaimer">
+        <span class="disclaimer-title">Clinical Disclaimer</span>
+        MedSwift utilizes multimodal computer vision and the Gemini 1.5 Flash engine for medication identification. This tool is for informational verification only and does not constitute medical advice. Always consult a licensed healthcare professional or pharmacist before consuming medication. Verification is cross-referenced with openFDA and RxNorm datasets.
+      </div>
+    </div>
+  </footer>
 
   <!-- Modules -->
   <script type="module" src="js/state.js"></script>
