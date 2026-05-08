@@ -1,4 +1,9 @@
-import { GEMINI_API_KEY } from './config.js';
+/**
+ * Multimodal Computer Vision Engine
+ * Powered by Gemini 1.5 Flash
+ */
+
+const GEMINI_API_KEY = "AIzaSyBAIPfy-zKrHaa11HBBlNRiAszn4LhmgHw";
 
 export async function identifyMedication(base64Image, signal) {
   const startTime = performance.now();
