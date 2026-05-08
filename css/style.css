@@ -98,23 +98,41 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 .site-header {
   position: relative; z-index: 50; padding: 24px 0;
 }
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: var(--cream-surface);
+  border-bottom: 1px solid var(--cream-border);
+  padding: 16px 0;
+  box-shadow: 0 4px 20px rgba(13, 148, 136, 0.03);
+}
+
 .nav-container {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
+
 .nav-brand {
-  display: flex; align-items: center; gap: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--teal-deep);
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 20px;
 }
+
 .brand-image {
-  height: 36px; width: auto; object-fit: contain;
-  filter: drop-shadow(0 4px 6px rgba(13,148,136,0.2));
-  transition: filter 0.3s ease;
+  height: 32px;
+  width: auto;
 }
-.nav-brand:hover .brand-image {
-  filter: drop-shadow(0 4px 12px rgba(13,148,136,0.4));
-}
+
 .brand-text {
   font-size: 20px; font-weight: 700; letter-spacing: -0.5px;
-  color: var(--white);
+  color: var(--teal-deep);
 }
 
 /* ──────────── CONTACT NAV BUTTON ──────────── */
@@ -687,30 +705,108 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   opacity: 0.7;
 }
 
-/* ──────────── FORM ACTIONS DUAL ──────────── */
-.form-actions-dual {
+/* ──────────── ENHANCED FOOTER ──────────── */
+.site-footer {
+  background: var(--cream-surface);
+  border-top: 1px solid var(--cream-border);
+  padding: 80px 0 40px;
+  margin-top: 80px;
+}
+.footer-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1.5fr;
+  gap: 60px;
+  margin-bottom: 60px;
+}
+.footer-brand {
   display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.footer-logo {
+  display: flex;
+  align-items: center;
   gap: 12px;
-  margin-top: 24px;
+  text-decoration: none;
+  color: var(--teal-deep);
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 24px;
 }
-.btn-dual {
-  flex: 1;
+.footer-desc {
+  color: var(--text-muted);
+  line-height: 1.6;
+  font-size: 14px;
+}
+.footer-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--teal-deep);
+  margin-bottom: 24px;
+}
+.social-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.social-item {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  padding: 14px !important;
-  font-size: 13px !important;
+  background: var(--pure-white);
+  border: 1px solid var(--cream-border);
+  border-radius: 10px;
+  color: var(--teal-primary);
+  text-decoration: none;
+  transition: all 0.3s ease;
 }
-.btn-whatsapp-alt {
-  border-color: #25D366 !important;
-  color: #25D366 !important;
+.social-item:hover {
+  background: var(--teal-primary);
+  color: var(--pure-white);
+  border-color: var(--teal-primary);
+  transform: translateY(-3px);
 }
-.btn-whatsapp-alt:hover {
-  background: rgba(37, 211, 102, 0.05) !important;
+.map-container {
+  width: 100%;
+  height: 200px;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid var(--cream-border);
+}
+.map-container iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.footer-bottom {
+  padding-top: 40px;
+  border-top: 1px solid var(--cream-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.clinical-disclaimer {
+  max-width: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  background: var(--teal-ultra-light);
+  padding: 20px;
+  border-radius: 16px;
+  margin-bottom: 40px;
 }
 
-@media (max-width: 480px) {
-  .form-actions-dual {
-    flex-direction: column;
-  }
+@media (max-width: 992px) {
+  .footer-grid { grid-template-columns: 1fr 1fr; }
+  .map-container { grid-column: span 2; }
+}
+@media (max-width: 768px) {
+  .footer-grid { grid-template-columns: 1fr; }
+  .map-container { grid-column: span 1; }
 }
 
 
