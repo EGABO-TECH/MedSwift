@@ -111,8 +111,8 @@
             </div>
           </div>
 
-          <form id="contact-form" class="contact-form" action="https://formspree.io/f/xjglagaz"
-            method="POST" novalidate>
+          <form id="contact-form" class="contact-form" action="https://formspree.io/f/xjglagaz" method="POST"
+            novalidate>
             <input type="hidden" name="_subject" value="New MedSwift Enterprise Inquiry">
             <div class="form-group">
               <label for="contact-name" class="form-label">Full Name</label>
@@ -298,7 +298,7 @@
 
         const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMsg}`;
         window.open(whatsappUrl, '_blank');
-        
+
         // Show success
         form.classList.add('hidden');
         successPanel.classList.remove('hidden');
@@ -332,7 +332,7 @@
         } catch (error) {
           console.error("Submission error:", error);
           alert("We encountered an issue sending your email. Please try again or use the WhatsApp option for an instant response.");
-          
+
           // Reset button
           submitEmailBtn.disabled = false;
           submitEmailBtn.innerHTML = '<i data-lucide="mail"></i> <span>Send via Email</span>';
