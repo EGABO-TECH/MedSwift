@@ -1,42 +1,28 @@
-/**
- * Multimodal Computer Vision Engine
- * Powered by Gemini 1.5 Flash
- */
-
-const GEMINI_API_KEY = "AIzaSyBAIPfy-zKrHaa11HBBlNRiAszn4LhmgHw";
-
 export async function identifyMedication(base64Image, signal) {
   const startTime = performance.now();
 
   // 1. Check Local Cache (Visual Signature Simulation)
-  // In a production app, we would generate a robust image hash.
-  // For this PWA, we simulate a 'visual signature' match.
   const cached = await checkLocalVisualCache(base64Image);
   if (cached) {
     return { ...cached, cached: true, verifyMs: Math.round(performance.now() - startTime) };
   }
 
-  // 2. Gemini 1.5 Flash Vision Pipeline
-  const prompt = "Identify this medication. Extract: [Drug Name], [Manufacturer/Origin], [Indication/Disease], [Dosage Form], and [Expiry Pattern]. Cross-reference with openFDA standards. Return as JSON with fields: drugName, manufacturer, indication, dosageForm, expiryPattern, confidenceScore (0-100), and originVerified (boolean).";
-
+  // 2. Secure Proxy Call (Gemini 1.5 Flash via Serverless Function)
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const response = await fetch('/api/identify', {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       signal,
       body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: "image/jpeg", data: base64Image.split(',')[1] } }
-          ]
-        }]
+        image: base64Image.split(',')[1] // Just the base64 data
       })
     });
 
-    const data = await response.json();
-    const resultText = data.candidates[0].content.parts[0].text;
-    const visionResult = JSON.parse(resultText.replace(/```json|```/g, ''));
+    if (!response.ok) {
+      throw new Error('Proxy analysis failed');
+    }
+
+    const visionResult = await response.json();
 
     // 3. Validation Layer (RxNorm Cross-Reference)
     const isValidated = await validateWithRxNorm(visionResult.drugName);
