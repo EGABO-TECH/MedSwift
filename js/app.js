@@ -57,13 +57,26 @@ function setupEventListeners() {
       return;
     }
 
-    // Scan every 4s — but only if the scanner is not already busy
+    // MedVision Hybrid Sentinel:
+    // 1. High-frequency Barcode Scan (Local, Lightweight)
+    // 2. Periodic Vision Analysis (Cloud AI)
     scanInterval = setInterval(async () => {
-      if (appState.get('scanStatus') === 'scanning' && !isScannerBusy()) {
+      const status = appState.get('scanStatus');
+      if (status !== 'scanning') return;
+
+      // Part A: Barcode Detection (Every 1s)
+      const barcodeText = await scanBarcode(els.video);
+      if (barcodeText && barcodeText !== lastDetectedBarcode) {
+        lastDetectedBarcode = barcodeText;
+        handleBarcodeDetection(barcodeText);
+      }
+
+      // Part B: Vision Analysis (Every 4s, if not already processing)
+      if (!isScannerBusy()) {
         const frame = await captureFrame(els.video);
         if (frame) await processVisionFrame(frame);
       }
-    }, 4000);
+    }, 1000); 
   });
 
   // ── Upload Image ──
@@ -181,6 +194,103 @@ async function processVisionFrame(frame) {
   }
 }
 
+/**
+ * Handles a successful barcode detection.
+ * Parses the GS1 string and attempts a ledger lookup.
+ */
+async function handleBarcodeDetection(rawText) {
+  const gs1Data = parseGS1(rawText);
+  if (!gs1Data.gtin) return;
+
+  console.log('MedVision Ledger: Searching for GTIN', gs1Data.gtin);
+  
+  // Visual feedback: emerald flash and beam lock
+  els.intelligenceIcon.style.color = '#10B981';
+  els.beam.style.background = 'linear-gradient(90deg, transparent, #10B981, #34D399, #10B981, transparent)';
+  els.beam.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.6)';
+  
+  setTimeout(() => {
+    els.intelligenceIcon.style.color = '';
+    if (appState.get('scanStatus') === 'verifying') {
+       // Keep the purple intelligence glow if vision is still running
+    } else {
+       els.beam.style.background = '';
+       els.beam.style.boxShadow = '';
+    }
+  }, 1000);
+
+  // Look up in our local medication ledger
+  const { db } = await import('./db.js');
+  const batch = await db.medicationBatch.where({ gtin: gs1Data.gtin, lot: gs1Data.lot }).first();
+
+  if (batch) {
+    console.log('MedVision Ledger: Batch found!', batch);
+    // Store this in appState so showResultCard can use it
+    appState.set('currentBatch', { ...gs1Data, ...batch, verified: true });
+    
+    // If we're already showing a card, update it live
+    if (!els.resultCard.classList.contains('hidden')) {
+      updateResultCardWithLedger(appState.get('currentBatch'));
+    }
+  } else {
+    appState.set('currentBatch', { ...gs1Data, verified: false });
+  }
+}
+
+/**
+ * Simple GS1 DataMatrix Parser for common AIs
+ * (01) GTIN, (10) Lot, (17) Expiry, (21) Serial
+ */
+function parseGS1(text) {
+  const data = {};
+  
+  // Regex patterns for standard AIs
+  const gtinMatch = text.match(/\(01\)(\d{14})/);
+  const lotMatch = text.match(/\(10\)([A-Z0-9-]+)/);
+  const expiryMatch = text.match(/\(17\)(\d{6})/);
+  const serialMatch = text.match(/\(21\)([A-Z0-9-]+)/);
+
+  if (gtinMatch) data.gtin = gtinMatch[1];
+  if (lotMatch) data.lot = lotMatch[1];
+  if (expiryMatch) data.expiry = expiryMatch[1];
+  if (serialMatch) data.serial = serialMatch[1];
+
+  return data;
+}
+
+function updateResultCardWithLedger(batch) {
+  const ledgerEl = document.getElementById('ledger-sync-row');
+  if (!ledgerEl) return;
+
+  ledgerEl.innerHTML = `
+    <span class="data-label">GS1 Ledger</span>
+    <span class="data-value" style="color: var(--success); font-weight: 600;">
+      <i data-lucide="check-circle" style="width:11px;height:11px;margin-right:4px;"></i>Synchronized
+    </span>
+  `;
+  
+  // Add Batch/Serial details to the bottom
+  const details = els.resultDetailsBox;
+  const existingBatch = document.getElementById('ledger-audit-block');
+  if (existingBatch) existingBatch.remove();
+
+  const batchBlock = document.createElement('div');
+  batchBlock.id = 'ledger-audit-block';
+  batchBlock.className = 'detail-block';
+  batchBlock.style.borderTop = '1px solid rgba(255,255,255,0.06)';
+  batchBlock.style.paddingTop = '10px';
+  batchBlock.innerHTML = `
+    <div class="detail-title"><i data-lucide="database" style="width:12px;height:12px;"></i> Supply Chain Audit</div>
+    <div class="detail-text" style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">
+      Lot: ${batch.lot} <br>
+      Serial: ${batch.serial} <br>
+      Expiry: ${batch.expiry}
+    </div>
+  `;
+  details.appendChild(batchBlock);
+  lucide.createIcons();
+}
+
 // ─── RESULT CARD ───
 function showResultCard(result) {
   const isOk     = result.authentic === true;
@@ -234,7 +344,17 @@ function showResultCard(result) {
         <i data-lucide="database" style="width:11px;height:11px;margin-right:3px;"></i>Offline Cache
       </span>
     </div>` : ''}
+    <div class="data-row" id="ledger-sync-row">
+      <span class="data-label">GS1 Ledger</span>
+      <span class="data-value" style="opacity: 0.5; font-size: 11px;">No Barcode Found</span>
+    </div>
   `;
+
+  // Check if we already have batch data from the sentinel
+  const currentBatch = appState.get('currentBatch');
+  if (currentBatch && currentBatch.verified) {
+    setTimeout(() => updateResultCardWithLedger(currentBatch), 10);
+  }
 
   // Detail blocks (clinical intelligence)
   const hasIndication = result.indication && result.indication !== 'null';
@@ -319,6 +439,8 @@ function stopCamera() {
 
 function resetScannerUI() {
   appState.set('scanStatus', 'idle');
+  appState.set('currentBatch', null);
+  lastDetectedBarcode = null;
 
   els.resultCard.classList.add('hidden');
   els.prompt.classList.remove('hidden');

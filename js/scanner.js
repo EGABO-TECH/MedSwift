@@ -3,12 +3,31 @@
  * Handles camera, frame capture, AI identification, and local caching.
  */
 
-// ─── PROCESSING LOCK ───
-// Prevents concurrent API calls — only one frame is analyzed at a time.
+// ─── PROCESSING LOCK & ENGINES ───
 let _isProcessing = false;
+const codeReader = new ZXing.BrowserMultiFormatReader();
 
 export function isScannerBusy() {
   return _isProcessing;
+}
+
+// ─── BARCODE SCANNING ───
+/**
+ * Scans a video element for 2D GS1 DataMatrix or QR codes.
+ */
+export async function scanBarcode(videoEl) {
+  try {
+    // We attempt a single-frame decode to keep the loop performant
+    const result = await codeReader.decodeFromVideoElement(videoEl);
+    if (result) {
+      console.log('MedVision: Barcode detected:', result.text);
+      return result.text;
+    }
+  } catch (err) {
+    // ZXing throws if no code is found in the frame; we ignore this.
+    return null;
+  }
+  return null;
 }
 
 // ─── CAMERA ───
