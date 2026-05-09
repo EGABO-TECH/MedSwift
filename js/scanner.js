@@ -97,12 +97,18 @@ export async function identifyMedication(base64Image, signal) {
       };
     }
 
-    // 2. Secure Proxy Call → Gemini 2.0 Flash via Vercel Serverless
+    // 2. Secure Proxy Call → Gemini 1.5 Flash via Vercel Serverless
+    const mimeMatch = base64Image.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+
     const response = await fetch('/api/identify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal,
-      body: JSON.stringify({ image: base64Image.split(',')[1] }) // Base64 data only
+      body: JSON.stringify({ 
+        image: base64Image.split(',')[1],
+        mimeType: mimeType
+      })
     });
 
     if (!response.ok) {
