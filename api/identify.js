@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ─── STAGE 1: OCR PRE-PROCESSOR (OCR.space) ───
+    // ─── STAGE 1: OCR PRE-PROCESSOR ───
     let extractedText = '';
     try {
       const ocrKey = process.env.OCR_SPACE_KEY || 'helloworld';
@@ -32,101 +32,53 @@ export default async function handler(req, res) {
       console.warn('OCR Skip:', e.message);
     }
 
-    // ─── STAGE 2: ELITE CLINICAL REASONING (Gemini 1.5 Pro) ───
-    const prompt = `You are a Senior Clinical Pharmacist and Forensic Drug Identity Expert.
-TASK: Perform a high-precision identification of the medication in this image.
+    // ─── STAGE 2: DUAL-MODEL RESILIENCE ENGINE ───
+    const prompt = `You are a Senior Clinical Pharmacist. Identify this medication.
+Label context: "${extractedText}"
+Provide drug identity, generic name, manufacturer, indication, instructions, warnings, and storage.
+Return a structured JSON report.`;
 
-METHODOLOGY:
-1. Scan for pharmaceutical imprints (e.g., M367, L484), NDC numbers, or GTINs.
-2. Analyze the label text provided: "${extractedText}"
-3. Cross-reference visual aesthetics (manufacturer logos, bottle shape) with known pharmaceutical databases.
-4. Use your search grounding to confirm the latest regulatory status and clinical safety warnings.
-
-Return an institutional-grade JSON report:
-{
-  "drugName": "Full Brand Name",
-  "genericName": "Scientific Generic Name",
-  "manufacturer": "Official Manufacturer Name",
-  "indication": "Clinical indications and use cases",
-  "dosageForm": "e.g., Tablet, Capsule, Liquid",
-  "dosageInstructions": "Standard administration guidelines",
-  "warnings": "CRITICAL safety warnings and side effects",
-  "storage": "Proper storage conditions (temp, light, humidity)",
-  "confidenceScore": number (0-100),
-  "confidenceRationale": "Brief explanation of how you identified this drug",
-  "originVerified": boolean (true if from a globally recognized manufacturer)
-}`;
-
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: prompt },
-              { inline_data: { mime_type: mimeType, data: image } }
-            ]
-          }],
-          safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-          ],
-          tools: [{
-            google_search_retrieval: {
-              dynamic_retrieval_config: {
-                mode: "MODE_DYNAMIC",
-                dynamic_threshold: 0.1 // Maximum intelligence grounding
-              }
-            }
-          }],
-          generationConfig: {
-            temperature: 0.05, // High precision
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                drugName: { type: "STRING" },
-                genericName: { type: "STRING" },
-                manufacturer: { type: "STRING" },
-                indication: { type: "STRING" },
-                dosageForm: { type: "STRING" },
-                dosageInstructions: { type: "STRING" },
-                warnings: { type: "STRING" },
-                storage: { type: "STRING" },
-                confidenceScore: { type: "NUMBER" },
-                confidenceRationale: { type: "STRING" },
-                originVerified: { type: "BOOLEAN" }
-              },
-              required: ["drugName", "confidenceScore", "originVerified"]
-            }
-          }
-        })
+    const generationConfig = {
+      temperature: 0.1,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          drugName: { type: "STRING" },
+          genericName: { type: "STRING" },
+          manufacturer: { type: "STRING" },
+          indication: { type: "STRING" },
+          dosageForm: { type: "STRING" },
+          dosageInstructions: { type: "STRING" },
+          warnings: { type: "STRING" },
+          storage: { type: "STRING" },
+          confidenceScore: { type: "NUMBER" },
+          confidenceRationale: { type: "STRING" },
+          originVerified: { type: "BOOLEAN" }
+        },
+        required: ["drugName", "confidenceScore", "originVerified"]
       }
-    );
+    };
 
-    const geminiData = await geminiResponse.json();
-    
-    if (geminiData.promptFeedback?.blockReason) {
-       return res.status(200).json({
-          drugName: "Identification Restricted",
-          confidenceScore: 0,
-          indication: "The intelligence engine's clinical safety filters restricted this identification. This occurs when the image content is highly ambiguous.",
-          originVerified: false,
-          authentic: false
-       });
+    const safetySettings = [
+      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+    ];
+
+    // Attempt 1: Gemini 1.5 Pro (The Expert)
+    let visionResult = null;
+    try {
+      console.log('MedVision: Attempting Expert Analysis (1.5 Pro)...');
+      visionResult = await callGemini('gemini-1.5-pro', prompt, image, mimeType, geminiApiKey, generationConfig, safetySettings);
+    } catch (err) {
+      console.warn('Expert Analysis throttled or unavailable. Falling back to High-Speed Engine...');
+      // Attempt 2: Gemini 1.5 Flash (The Sentinel)
+      visionResult = await callGemini('gemini-1.5-flash', prompt, image, mimeType, geminiApiKey, generationConfig, safetySettings);
+      visionResult.engine = "High-Speed Sentinel";
     }
 
-    const rawResult = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!rawResult) {
-      throw new Error('Intelligence engine returned an empty response.');
-    }
-
-    const visionResult = JSON.parse(rawResult);
     visionResult.analysisTimestamp = new Date().toISOString();
     visionResult.ocrEnhanced = extractedText.length > 0;
     visionResult.authentic = visionResult.confidenceScore >= 80 && visionResult.originVerified;
@@ -134,7 +86,43 @@ Return an institutional-grade JSON report:
     return res.status(200).json(visionResult);
 
   } catch (err) {
-    console.error('MedVision Intelligence Failure:', err.message);
-    return res.status(500).json({ error: "Clinical Engine Unavailable", details: err.message });
+    console.error('MedVision Critical Failure:', err.message);
+    return res.status(500).json({ error: "Intelligence Engine Unavailable", details: err.message });
   }
+}
+
+/**
+ * Helper to call a specific Gemini model
+ */
+async function callGemini(modelName, prompt, imageData, mimeType, apiKey, config, safety) {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: mimeType, data: imageData } }
+          ]
+        }],
+        safetySettings: safety,
+        generationConfig: config
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Model ${modelName} failed with ${response.status}: ${errorBody}`);
+  }
+
+  const data = await response.json();
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!rawText) throw new Error(`Model ${modelName} returned empty response`);
+
+  const result = JSON.parse(rawText);
+  result.engine = modelName === 'gemini-1.5-pro' ? "Elite Clinical Expert" : "High-Speed Sentinel";
+  return result;
 }

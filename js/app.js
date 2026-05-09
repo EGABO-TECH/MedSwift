@@ -424,7 +424,7 @@ function showResultCard(result) {
 
     <div class="detail-block" style="background: rgba(255, 255, 255, 0.01); border: 1px dashed rgba(255, 255, 255, 0.05);">
       <div class="detail-text" style="font-size: 10px; opacity: 0.4; text-transform: uppercase; letter-spacing: 1px; font-family: 'JetBrains Mono', monospace;">
-        Ref: ${Date.now()} | Engine: MedVision 2.5 | Latency: ${result.verifyMs ?? '—'}ms
+        Ref: ${Date.now()} | Engine: ${result.engine || 'MedVision AI'} | Latency: ${result.verifyMs ?? '—'}ms
       </div>
     </div>
   `;
