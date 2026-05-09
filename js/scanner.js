@@ -30,6 +30,22 @@ export async function scanBarcode(videoEl) {
   return null;
 }
 
+/**
+ * Scans a static image element for barcodes.
+ */
+export async function scanBarcodeFromImage(imgEl) {
+  try {
+    const result = await codeReader.decodeFromImageElement(imgEl);
+    if (result) {
+      console.log('MedVision: Barcode detected in image:', result.text);
+      return result.text;
+    }
+  } catch (err) {
+    return null;
+  }
+  return null;
+}
+
 // ─── CAMERA ───
 export async function startCamera(videoEl) {
   try {

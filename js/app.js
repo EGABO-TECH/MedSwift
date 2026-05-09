@@ -1,10 +1,11 @@
 import { appState } from './state.js';
 import { seedDemoData } from './db.js';
-import { startCamera, captureFrame, identifyMedication, isScannerBusy } from './scanner.js';
+import { startCamera, captureFrame, identifyMedication, isScannerBusy, scanBarcode, scanBarcodeFromImage } from './scanner.js';
 
 let activeStream = null;
 let scanInterval = null;
 let analysisController = null;
+let lastDetectedBarcode = null;
 
 // ─── UI ELEMENT REGISTRY ───
 const els = {
@@ -25,6 +26,7 @@ const els = {
   cancelAnalysisBox: document.getElementById('analysis-cancel-box'),
   btnCancelAnalysis: document.getElementById('btn-cancel-analysis'),
   btnDownloadPdf:    document.getElementById('btn-download-pdf'),
+  uploadPreview:     document.getElementById('scanner-upload-preview'),
 
   // Result card fields
   resultIconBg:      document.getElementById('result-icon-bg'),
@@ -88,9 +90,30 @@ function setupEventListeners() {
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-      showScannerActive();
-      await processVisionFrame(event.target.result);
-      els.uploadInput.value = ''; // Allow same file to be re-uploaded
+      const base64Image = event.target.result;
+      
+      // Part 1: Setup UI for the uploaded asset
+      stopCamera(); // Stop live camera if running
+      if (scanInterval) clearInterval(scanInterval);
+      
+      els.uploadPreview.src = base64Image;
+      els.uploadPreview.classList.remove('hidden');
+      els.placeholder.classList.add('hidden');
+      els.video.classList.remove('is-active');
+      
+      showScannerActive(); // Shows beam, hides controls
+
+      // Part 2: Trigger the Sentinel Analysis
+      // Attempt barcode scan from the image first
+      const barcodeText = await scanBarcodeFromImage(els.uploadPreview);
+      if (barcodeText) {
+        handleBarcodeDetection(barcodeText);
+      }
+
+      // Run Vision analysis
+      await processVisionFrame(base64Image);
+      
+      els.uploadInput.value = ''; 
     };
     reader.readAsDataURL(file);
   });
@@ -443,6 +466,8 @@ function resetScannerUI() {
   lastDetectedBarcode = null;
 
   els.resultCard.classList.add('hidden');
+  els.uploadPreview.classList.add('hidden');
+  els.uploadPreview.src = '';
   els.prompt.classList.remove('hidden');
   els.controls.classList.remove('hidden');
   els.placeholder.classList.remove('hidden');
