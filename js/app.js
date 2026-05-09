@@ -24,6 +24,7 @@ const els = {
   intelligenceIcon: document.getElementById('intelligence-icon'),
   cancelAnalysisBox: document.getElementById('analysis-cancel-box'),
   btnCancelAnalysis: document.getElementById('btn-cancel-analysis'),
+  btnDownloadPdf: document.getElementById('btn-download-pdf'),
   
   // Result
   resultIconBg: document.getElementById('result-icon-bg'),
@@ -100,6 +101,85 @@ function setupEventListeners() {
   });
 
   els.dismissScan.addEventListener('click', resetScannerUI);
+
+  if (els.btnDownloadPdf) {
+    els.btnDownloadPdf.addEventListener('click', generatePDFReport);
+  }
+}
+
+// ─── PDF REPORT GENERATION ───
+function generatePDFReport() {
+  const originalText = els.btnDownloadPdf.innerHTML;
+  els.btnDownloadPdf.innerHTML = '<span class="btn-spinner" style="width: 14px; height: 14px; border-width: 2px;"></span> <span style="margin-left: 8px;">Generating...</span>';
+  els.btnDownloadPdf.disabled = true;
+
+  const element = els.resultCard.cloneNode(true);
+  
+  // Remove interactive UI elements not needed in the report
+  const closeBtn = element.querySelector('.result-close');
+  if (closeBtn) closeBtn.remove();
+  
+  const downloadBtn = element.querySelector('.result-actions');
+  if (downloadBtn) downloadBtn.remove();
+
+  // Add an official header for the PDF
+  const headerHTML = `
+    <div style="text-align: center; margin-bottom: 30px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 20px;">
+      <h2 style="font-family: 'Playfair Display', serif; color: #FFFFFF; font-size: 28px; margin-bottom: 8px;">MedSwift Vision</h2>
+      <p style="color: rgba(255,255,255,0.6); font-size: 14px; margin: 0; text-transform: uppercase; letter-spacing: 2px;">Official Verification Report</p>
+      <p style="color: rgba(255,255,255,0.4); font-size: 11px; margin-top: 8px;">Generated on: ${new Date().toLocaleString()}</p>
+    </div>
+  `;
+  element.insertAdjacentHTML('afterbegin', headerHTML);
+
+  // Styling adjustments for PDF rendering
+  element.style.padding = '40px';
+  element.style.background = '#050505'; // Match dark theme
+  element.style.color = '#FFFFFF';
+  element.style.width = '800px'; 
+  element.style.boxSizing = 'border-box';
+  element.style.position = 'relative';
+  element.style.borderRadius = '0'; // Flat for PDF
+  element.style.boxShadow = 'none';
+  
+  // Ensure icons have some size context if lucide hasn't replaced them
+  // The clone will have already been processed by Lucide, so it will contain SVG tags.
+  const svgs = element.querySelectorAll('svg');
+  svgs.forEach(svg => {
+    svg.style.width = '18px';
+    svg.style.height = '18px';
+    // Remove lucide classes that might mess with PDF rendering
+    svg.classList.remove('lucide'); 
+  });
+
+  // Temporarily attach to DOM for html2canvas
+  const container = document.createElement('div');
+  container.style.position = 'absolute';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.appendChild(element);
+  document.body.appendChild(container);
+
+  const opt = {
+    margin:       10,
+    filename:     'MedSwift_Verification_Report.pdf',
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#050505' },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  html2pdf().set(opt).from(element).save().then(() => {
+    document.body.removeChild(container);
+    els.btnDownloadPdf.innerHTML = '<i data-lucide="download"></i> Download PDF Report';
+    els.btnDownloadPdf.disabled = false;
+    lucide.createIcons();
+  }).catch(err => {
+    console.error('PDF Generation Error:', err);
+    document.body.removeChild(container);
+    els.btnDownloadPdf.innerHTML = '<i data-lucide="download"></i> Download PDF Report';
+    els.btnDownloadPdf.disabled = false;
+    lucide.createIcons();
+  });
 }
 
 // ─── VISION LOGIC ───

@@ -25,6 +25,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
   <script src="https://unpkg.com/@zxing/library@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 
 <body class="grid-texture">
@@ -155,6 +156,12 @@
               <div class="result-data" id="result-data-rows"></div>
 
               <div class="result-details" id="result-details-box"></div>
+
+              <div class="result-actions" style="margin-top: 20px; display: flex; justify-content: center; width: 100%;">
+                <button id="btn-download-pdf" class="btn btn-accent" style="width: 100%; padding: 12px; font-size: 13px;">
+                  <i data-lucide="download"></i> Download PDF Report
+                </button>
+              </div>
             </div>
 
             <!-- Cancel Analysis Button -->
