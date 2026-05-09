@@ -1009,116 +1009,162 @@ button {
   white-space: nowrap;
 }
 
-/* ──────────── RESULT CARD (ENHANCED) ──────────── */
+/* ──────────── TRUTH REPORT: PREMIUM UI ──────────── */
 .result-card {
   position: absolute;
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
-  z-index: 20;
-  border-radius: 20px;
-  padding: 20px;
-  border: 1px solid var(--cream-border);
-  backdrop-filter: blur(24px);
-  background: rgba(253, 251, 247, 0.9);
-  box-shadow: 0 20px 40px rgba(13, 148, 136, 0.15);
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  z-index: 50;
+  border-radius: 28px;
+  padding: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 10, 15, 0.92);
+  backdrop-filter: blur(30px) saturate(150%);
+  box-shadow: 
+    0 30px 60px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  max-height: 85%;
+  overflow-y: auto;
 }
 
 .result-header {
   display: flex;
-  items-center: center;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--cream-border);
+  margin-bottom: 28px;
 }
 
 .result-status {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
 }
 
 .result-icon-box {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.4);
 }
 
 .result-title {
-  font-size: 13px;
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: -0.02em;
+  color: #FFFFFF;
 }
 
 .result-close {
-  color: var(--text-muted);
-  padding: 4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.4);
+  transition: all 0.3s ease;
 }
 
 .result-close:hover {
-  color: var(--white);
+  background: rgba(239, 68, 68, 0.2);
+  color: #EF4444;
 }
 
+/* Data Grid Layout */
 .result-data {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 32px;
 }
 
 .data-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
 }
 
 .data-label {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
   text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .data-value {
-  font-size: 12px;
-  font-weight: 500;
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+  color: #FFFFFF;
   text-align: right;
 }
 
+/* Clinical Intelligence Blocks */
 .result-details {
-  background: rgba(0, 0, 0, 0.2);
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid var(--cream-border);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .detail-block {
-  margin-bottom: 12px;
-}
-
-.detail-block:last-child {
-  margin-bottom: 0;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
 }
 
 .detail-title {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--teal-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 800;
   text-transform: uppercase;
-  margin-bottom: 4px;
+  letter-spacing: 0.1em;
+  color: var(--teal-primary);
+  margin-bottom: 12px;
 }
 
 .detail-text {
-  font-size: 11px;
-  color: var(--text-main);
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 400;
 }
+
+/* Status Variants (Auras) */
+.truth-report.authentic {
+  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(16, 185, 129, 0.1);
+}
+.truth-report.authentic .result-icon-box { border-color: rgba(16, 185, 129, 0.4); color: #10B981; }
+
+.truth-report.manual-review {
+  border-color: rgba(234, 179, 8, 0.3);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(234, 179, 8, 0.1);
+}
+.truth-report.manual-review .result-icon-box { border-color: rgba(234, 179, 8, 0.4); color: #EAB308; }
+
+.truth-report.unverified {
+  border-color: rgba(239, 68, 68, 0.3);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(239, 68, 68, 0.1);
+}
+.truth-report.unverified .result-icon-box { border-color: rgba(239, 68, 68, 0.4); color: #EF4444; }
 
 /* ──────────── CONTACT FORM ACTIONS ──────────── */
 .form-actions-dual {

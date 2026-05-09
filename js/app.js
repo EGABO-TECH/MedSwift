@@ -294,8 +294,8 @@ function updateResultCardWithLedger(batch) {
 
   ledgerEl.innerHTML = `
     <span class="data-label">GS1 Ledger</span>
-    <span class="data-value" style="color: var(--success); font-weight: 600;">
-      <i data-lucide="check-circle" style="width:11px;height:11px;margin-right:4px;"></i>Synchronized
+    <span class="data-value" style="color: #10B981; font-weight: 700;">
+      <i data-lucide="check-circle" style="width:12px;height:12px;margin-right:6px;vertical-align:middle;"></i>SYNCHRONIZED
     </span>
   `;
   
@@ -307,14 +307,15 @@ function updateResultCardWithLedger(batch) {
   const batchBlock = document.createElement('div');
   batchBlock.id = 'ledger-audit-block';
   batchBlock.className = 'detail-block';
-  batchBlock.style.borderTop = '1px solid rgba(255,255,255,0.06)';
-  batchBlock.style.paddingTop = '10px';
+  batchBlock.style.border = '1px solid rgba(16, 185, 129, 0.2)';
+  batchBlock.style.background = 'rgba(16, 185, 129, 0.03)';
   batchBlock.innerHTML = `
-    <div class="detail-title"><i data-lucide="database" style="width:12px;height:12px;"></i> Supply Chain Audit</div>
-    <div class="detail-text" style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">
-      Lot: ${batch.lot} <br>
-      Serial: ${batch.serial} <br>
-      Expiry: ${batch.expiry}
+    <div class="detail-title" style="color: #10B981;"><i data-lucide="database" style="width:12px;height:12px;"></i> Supply Chain Audit</div>
+    <div class="detail-text" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #10B981; opacity: 0.9;">
+      GTIN: ${batch.gtin} <br>
+      LOT: ${batch.lot} <br>
+      SERIAL: ${batch.serial} <br>
+      EXPIRY: ${batch.expiry}
     </div>
   `;
   details.appendChild(batchBlock);
@@ -334,57 +335,37 @@ function showResultCard(result) {
 
   // Icon & Title
   const iconName  = isOk ? 'shield-check' : (isManual ? 'alert-circle' : 'shield-alert');
-  const titleText = isOk ? 'Truth Report: Authentic' : (isManual ? 'Manual Review Required' : 'Truth Report: Unverified');
+  const titleText = isOk ? 'Authentic' : (isManual ? 'Manual Review' : 'Unverified');
   els.resultIcon.setAttribute('data-lucide', iconName);
-  els.resultTitle.textContent = titleText;
+  els.resultTitle.textContent = `Truth Report: ${titleText}`;
 
   // Core data rows
   const confidence = result.confidenceScore ?? 0;
-  const confColor  = confidence >= 80 ? 'var(--success)' : (confidence >= 50 ? '#EAB308' : 'var(--danger)');
+  const confColor  = confidence >= 80 ? '#10B981' : (confidence >= 50 ? '#EAB308' : '#EF4444');
 
   els.resultDataRows.innerHTML = `
     <div class="data-row">
-      <span class="data-label">Drug Name</span>
-      <span class="data-value">${escapeHtml(result.drugName || 'Unknown')}</span>
+      <span class="data-label">Product Name</span>
+      <span class="data-value" style="font-family: 'Playfair Display', serif; font-size: 16px;">${escapeHtml(result.drugName || 'Unknown')}</span>
     </div>
     ${result.genericName ? `
     <div class="data-row">
-      <span class="data-label">Generic</span>
-      <span class="data-value" style="font-size: 11px; opacity: 0.8;">${escapeHtml(result.genericName)}</span>
+      <span class="data-label">Generic ID</span>
+      <span class="data-value" style="font-size: 12px; color: var(--teal-primary); opacity: 0.9;">${escapeHtml(result.genericName)}</span>
     </div>` : ''}
     <div class="data-row">
       <span class="data-label">Manufacturer</span>
       <span class="data-value">${escapeHtml(result.manufacturer || 'Unverified')}</span>
     </div>
     <div class="data-row">
-      <span class="data-label">Confidence</span>
-      <span class="data-value" style="color: ${confColor}; font-weight: 600;">${confidence}%</span>
+      <span class="data-label">Verification Score</span>
+      <span class="data-value" style="color: ${confColor}; font-weight: 800;">${confidence}%</span>
     </div>
-    ${result.isEssentialMedicine ? `
-    <div class="data-row">
-      <span class="data-label">WHO Status</span>
-      <span class="data-value" style="color: var(--teal); font-weight: 600;">
-        <i data-lucide="star" style="width:12px;height:12px;margin-right:4px;"></i>Essential Medicine
-      </span>
-    </div>` : ''}
-    ${result.cached ? `
-    <div class="data-row">
-      <span class="data-label">Source</span>
-      <span class="data-value" style="color: var(--purple-glow); font-size: 11px;">
-        <i data-lucide="database" style="width:11px;height:11px;margin-right:3px;"></i>Offline Cache
-      </span>
-    </div>` : ''}
     <div class="data-row" id="ledger-sync-row">
       <span class="data-label">GS1 Ledger</span>
-      <span class="data-value" style="opacity: 0.5; font-size: 11px;">No Barcode Found</span>
+      <span class="data-value" style="opacity: 0.4; font-size: 11px; font-weight: 800; letter-spacing: 1px;">AWAITING BARCODE</span>
     </div>
   `;
-
-  // Check if we already have batch data from the sentinel
-  const currentBatch = appState.get('currentBatch');
-  if (currentBatch && currentBatch.verified) {
-    setTimeout(() => updateResultCardWithLedger(currentBatch), 10);
-  }
 
   // Detail blocks (clinical intelligence)
   const hasIndication = result.indication && result.indication !== 'null';
@@ -394,47 +375,39 @@ function showResultCard(result) {
   els.resultDetailsBox.innerHTML = `
     ${hasIndication ? `
     <div class="detail-block">
-      <div class="detail-title"><i data-lucide="activity" style="width:12px;height:12px;"></i> Indication</div>
+      <div class="detail-title"><i data-lucide="activity"></i> Primary Indication</div>
       <div class="detail-text">${escapeHtml(result.indication)}</div>
+    </div>` : ''}
+
+    ${hasWarning ? `
+    <div class="detail-block" style="border: 1px solid rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.02);">
+      <div class="detail-title" style="color: #EF4444;"><i data-lucide="alert-triangle"></i> Critical Warning</div>
+      <div class="detail-text" style="color: #EF4444; font-weight: 500;">${escapeHtml(result.warnings)}</div>
     </div>` : ''}
 
     ${hasDosage ? `
     <div class="detail-block">
-      <div class="detail-title"><i data-lucide="pill" style="width:12px;height:12px;"></i> Dosage Instructions</div>
+      <div class="detail-title"><i data-lucide="pill"></i> Dosage Instructions</div>
       <div class="detail-text">${escapeHtml(result.dosageInstructions)}</div>
     </div>` : ''}
 
-    ${hasWarning ? `
-    <div class="detail-block" style="border-left: 2px solid rgba(239,68,68,0.5);">
-      <div class="detail-title" style="color: #EF4444;"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Clinical Warning</div>
-      <div class="detail-text" style="color: rgba(255,255,255,0.75);">${escapeHtml(result.warnings)}</div>
-    </div>` : ''}
-
     <div class="detail-block">
-      <div class="detail-title"><i data-lucide="shield" style="width:12px;height:12px;"></i> Origin Verification</div>
+      <div class="detail-title"><i data-lucide="shield"></i> Institutional Verification</div>
       <div class="detail-text">${result.originVerified
-        ? '✓ Manufacturer cross-referenced with global pharma databases.'
-        : '✗ Origin data could not be verified against known databases.'
+        ? 'Origin verified against GS1 Global Pharma Index.'
+        : 'Manufacturer origin data is outside verified supply chain databases.'
       }</div>
     </div>
 
-    <div class="detail-block">
-      <div class="detail-title"><i data-lucide="package" style="width:12px;height:12px;"></i> Supply Chain</div>
-      <div class="detail-text">
-        Shelf-life: ${escapeHtml(result.expiryPattern || 'N/A')} &nbsp;|&nbsp;
-        Ledger: ${result.cached ? 'Offline (Cached)' : 'Live'} &nbsp;|&nbsp;
-        OCR Enhanced: ${result.ocrEnhanced ? 'Yes' : 'No'}
-      </div>
-    </div>
-
-    <div class="detail-block" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; margin-top: 4px;">
-      <div class="detail-text" style="font-size: 10px; opacity: 0.4;">
-        Analysis time: ${result.verifyMs ?? '—'}ms &nbsp;|&nbsp;
-        ${result.timestamp ? new Date(result.timestamp).toLocaleString() : ''}
-        ${result.localDbMatch ? '&nbsp;|&nbsp; ✓ Local DB Match' : ''}
+    <div class="detail-block" style="background: rgba(255, 255, 255, 0.01); border: 1px dashed rgba(255, 255, 255, 0.05);">
+      <div class="detail-text" style="font-size: 10px; opacity: 0.4; text-transform: uppercase; letter-spacing: 1px; font-family: 'JetBrains Mono', monospace;">
+        Ref: ${Date.now()} | Engine: MedVision 2.5 | Latency: ${result.verifyMs ?? '—'}ms
       </div>
     </div>
   `;
+
+  // Update button
+  els.btnDownloadPdf.setAttribute('onclick', `generatePDFReport(${JSON.stringify(result).replace(/"/g, '&quot;')})`);
 
   els.resultCard.classList.remove('hidden');
   lucide.createIcons();
@@ -547,81 +520,111 @@ function renderAuditTrail() {
 }
 
 // ─── PDF REPORT GENERATION ───
-function generatePDFReport() {
-  const originalHTML = els.btnDownloadPdf.innerHTML;
-  els.btnDownloadPdf.innerHTML = `
-    <span class="btn-spinner" style="width:14px;height:14px;border-width:2px;"></span>
-    <span style="margin-left:8px;">Generating PDF...</span>
-  `;
-  els.btnDownloadPdf.disabled = true;
+/**
+ * Generates an Institutional-Grade Audit Report.
+ * Constructing a clean, high-contrast template specifically for PDF.
+ */
+async function generatePDFReport(result) {
+  const isOk = result.authentic === true;
+  const statusColor = isOk ? '#10B981' : (result.manualReviewRequired ? '#EAB308' : '#EF4444');
+  const statusText = isOk ? 'AUTHENTIC' : (result.manualReviewRequired ? 'MANUAL REVIEW REQUIRED' : 'UNVERIFIED / COUNTERFEIT RISK');
+  
+  // Construct the template
+  const reportEl = document.createElement('div');
+  reportEl.style.width = '700px';
+  reportEl.style.padding = '60px';
+  reportEl.style.background = '#FFFFFF';
+  reportEl.style.color = '#000000';
+  reportEl.style.fontFamily = "'Inter', sans-serif";
+  reportEl.style.position = 'absolute';
+  reportEl.style.left = '-9999px';
+  reportEl.style.top = '-9999px';
 
-  const element = els.resultCard.cloneNode(true);
+  reportEl.innerHTML = `
+    <!-- Header -->
+    <div style="border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end;">
+      <div>
+        <h1 style="font-family: 'Playfair Display', serif; font-size: 32px; margin: 0; letter-spacing: -1px;">MedVision Audit</h1>
+        <p style="font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; color: #666; margin-top: 5px;">Official Pharmaceutical Verification Report</p>
+      </div>
+      <div style="text-align: right;">
+        <p style="font-size: 10px; color: #999; margin: 0;">Ref No: MV-${Date.now()}</p>
+        <p style="font-size: 10px; color: #999; margin: 0;">Date: ${new Date().toLocaleString()}</p>
+      </div>
+    </div>
 
-  // Strip interactive elements from the PDF clone
-  element.querySelector('.result-close')?.remove();
-  element.querySelector('.result-actions')?.remove();
-  document.getElementById('scan-inline-error')?.remove();
+    <!-- Status Banner -->
+    <div style="background: ${statusColor}; color: #FFF; padding: 20px; border-radius: 4px; margin-bottom: 40px; text-align: center;">
+      <h2 style="margin: 0; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 4px;">REPORT STATUS: ${statusText}</h2>
+    </div>
 
-  // Add official document header
-  element.insertAdjacentHTML('afterbegin', `
-    <div style="text-align:center; margin-bottom:28px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:20px;">
-      <h2 style="font-family:'Playfair Display',serif; color:#FFFFFF; font-size:26px; margin:0 0 6px 0; letter-spacing:1px;">
-        MedSwift Vision
-      </h2>
-      <p style="color:rgba(255,255,255,0.5); font-size:12px; margin:0; text-transform:uppercase; letter-spacing:3px;">
-        Official Pharmaceutical Verification Report
-      </p>
-      <p style="color:rgba(255,255,255,0.3); font-size:10px; margin:8px 0 0 0;">
-        Generated: ${new Date().toLocaleString()} &nbsp;|&nbsp; MedSwift Platform v2.0
+    <!-- Core Findings Grid -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px;">
+      <div>
+        <h3 style="font-size: 11px; border-bottom: 1px solid #EEE; padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">Product Identity</h3>
+        <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Drug Name</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.drugName}</td></tr>
+          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Manufacturer</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.manufacturer}</td></tr>
+          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Verification Score</td><td style="padding: 10px 0; font-weight: 700; text-align: right; color: ${statusColor}">${result.confidenceScore}%</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3 style="font-size: 11px; border-bottom: 1px solid #EEE; padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">Supply Chain Intel</h3>
+        <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Ledger Status</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${appState.get('currentBatch') ? 'SYNCHRONIZED' : 'INCOMPLETE'}</td></tr>
+          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Origin DB</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.originVerified ? 'VERIFIED' : 'UNVERIFIED'}</td></tr>
+          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Source</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.cached ? 'Visual Offline Cache' : 'Gemini Vision AI'}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Clinical Analysis Section -->
+    <div style="margin-bottom: 40px; background: #FBFBFC; padding: 30px; border-radius: 8px; border: 1px solid #F0F0F2;">
+      <h3 style="font-size: 11px; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; color: #666;">Intelligence Summary</h3>
+      
+      <div style="margin-bottom: 24px;">
+        <p style="font-size: 10px; font-weight: 800; color: #0D9488; margin-bottom: 8px; text-transform: uppercase;">Primary Indication</p>
+        <p style="font-size: 14px; margin: 0; line-height: 1.6;">${result.indication || 'No clinical indications identified in current scan.'}</p>
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <p style="font-size: 10px; font-weight: 800; color: #EF4444; margin-bottom: 8px; text-transform: uppercase;">Clinical Safety Warnings</p>
+        <p style="font-size: 14px; margin: 0; line-height: 1.6; color: #EF4444; font-weight: 500;">${result.warnings || 'NO CRITICAL WARNINGS DETECTED'}</p>
+      </div>
+
+      <div>
+        <p style="font-size: 10px; font-weight: 800; color: #666; margin-bottom: 8px; text-transform: uppercase;">Standard Dosage Instructions</p>
+        <p style="font-size: 14px; margin: 0; line-height: 1.6;">${result.dosageInstructions || 'Instructions not detected. Please verify with a licensed pharmacist.'}</p>
+      </div>
+    </div>
+
+    <!-- Footer Disclaimer -->
+    <div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #EEE;">
+      <p style="font-size: 9px; color: #AAA; text-align: center; line-height: 1.6;">
+        MedVision is an AI-assisted verification tool. This report is for auditing purposes and does not constitute medical advice. 
+        Always cross-reference with professional medical laboratory results and manufacturer's official documentation.
       </p>
     </div>
-  `);
-
-  // PDF rendering styles
-  element.style.cssText = `
-    padding: 40px;
-    background: #080808;
-    color: #FFFFFF;
-    width: 800px;
-    box-sizing: border-box;
-    border-radius: 0;
-    box-shadow: none;
-    position: relative;
   `;
 
-  // Fix SVG sizes for pdf rendering
-  element.querySelectorAll('svg').forEach(svg => {
-    svg.style.width = '14px';
-    svg.style.height = '14px';
-  });
+  document.body.appendChild(reportEl);
 
-  // Temporarily mount off-screen
-  const offscreen = document.createElement('div');
-  offscreen.style.cssText = 'position:absolute; left:-9999px; top:0;';
-  offscreen.appendChild(element);
-  document.body.appendChild(offscreen);
+  const opt = {
+    margin:       0,
+    filename:     `MedVision_Audit_${result.drugName.replace(/\s/g, '_')}_${Date.now()}.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
+    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+  };
 
-  const drugName = els.resultTitle.textContent.replace(/[^a-z0-9]/gi, '_').slice(0, 40);
-  const filename = `MedSwift_Report_${drugName}_${Date.now()}.pdf`;
-
-  html2pdf().set({
-    margin: 10,
-    filename,
-    image:       { type: 'jpeg', quality: 0.97 },
-    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#080808' },
-    jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  }).from(element).save().then(() => {
-    document.body.removeChild(offscreen);
-    els.btnDownloadPdf.innerHTML = originalHTML;
-    els.btnDownloadPdf.disabled = false;
-    lucide.createIcons();
-  }).catch(err => {
-    console.error('PDF Generation Error:', err);
-    document.body.removeChild(offscreen);
-    els.btnDownloadPdf.innerHTML = originalHTML;
-    els.btnDownloadPdf.disabled = false;
-    lucide.createIcons();
-  });
+  try {
+    await html2pdf().from(reportEl).set(opt).save();
+    document.body.removeChild(reportEl);
+  } catch (err) {
+    console.error('PDF Engine Failure:', err);
+    alert('PDF Generation failed. Please try again.');
+    document.body.removeChild(reportEl);
+  }
 }
 
 // ─── UTILITY ───
