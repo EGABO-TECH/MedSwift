@@ -404,6 +404,17 @@ function showResultCard(result) {
     </div>` : ''}
 
     <div class="detail-block">
+      <div class="detail-title"><i data-lucide="thermometer"></i> Storage Conditions</div>
+      <div class="detail-text">${escapeHtml(result.storage || 'Standard pharmaceutical storage (Cool, dry place).')}</div>
+    </div>
+
+    ${result.confidenceRationale ? `
+    <div class="detail-block" style="background: rgba(13, 148, 136, 0.05); border-color: rgba(13, 148, 136, 0.2);">
+      <div class="detail-title" style="color: var(--teal-primary);"><i data-lucide="brain"></i> Confidence Rationale</div>
+      <div class="detail-text" style="font-size: 11px; font-style: italic;">${escapeHtml(result.confidenceRationale)}</div>
+    </div>` : ''}
+
+    <div class="detail-block">
       <div class="detail-title"><i data-lucide="shield"></i> Institutional Verification</div>
       <div class="detail-text">${result.originVerified
         ? 'Origin verified against GS1 Global Pharma Index.'

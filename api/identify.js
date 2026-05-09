@@ -32,31 +32,33 @@ export default async function handler(req, res) {
       console.warn('OCR Skip:', e.message);
     }
 
-    // ─── STAGE 2: ADVANCED PHARMA REASONING ───
-    const prompt = `You are a professional pharmaceutical identification tool. 
-Task: Identify the medication in this image (it may be a bottle, a box, or loose pills).
-Context from OCR: "${extractedText}"
+    // ─── STAGE 2: ELITE CLINICAL REASONING (Gemini 1.5 Pro) ───
+    const prompt = `You are a Senior Clinical Pharmacist and Forensic Drug Identity Expert.
+TASK: Perform a high-precision identification of the medication in this image.
 
-If loose pills are shown: Identify them by color, shape, and any imprints (e.g., "M367", "WATSON"). 
-If you are uncertain: Provide your best professional identification based on visual characteristics. 
-CRITICAL: You must ALWAYS return a JSON object. If identification is impossible, set drugName to "Unknown Medication" and provide a visual description in the indication field.
+METHODOLOGY:
+1. Scan for pharmaceutical imprints (e.g., M367, L484), NDC numbers, or GTINs.
+2. Analyze the label text provided: "${extractedText}"
+3. Cross-reference visual aesthetics (manufacturer logos, bottle shape) with known pharmaceutical databases.
+4. Use your search grounding to confirm the latest regulatory status and clinical safety warnings.
 
-Return this exact JSON:
+Return an institutional-grade JSON report:
 {
-  "drugName": "string",
-  "genericName": "string",
-  "manufacturer": "string",
-  "indication": "string",
-  "dosageForm": "string",
-  "dosageInstructions": "string",
-  "warnings": "string",
-  "expiryPattern": "string",
-  "confidenceScore": number,
-  "originVerified": boolean
+  "drugName": "Full Brand Name",
+  "genericName": "Scientific Generic Name",
+  "manufacturer": "Official Manufacturer Name",
+  "indication": "Clinical indications and use cases",
+  "dosageForm": "e.g., Tablet, Capsule, Liquid",
+  "dosageInstructions": "Standard administration guidelines",
+  "warnings": "CRITICAL safety warnings and side effects",
+  "storage": "Proper storage conditions (temp, light, humidity)",
+  "confidenceScore": number (0-100),
+  "confidenceRationale": "Brief explanation of how you identified this drug",
+  "originVerified": boolean (true if from a globally recognized manufacturer)
 }`;
 
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiApiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -77,14 +79,13 @@ Return this exact JSON:
             google_search_retrieval: {
               dynamic_retrieval_config: {
                 mode: "MODE_DYNAMIC",
-                dynamic_threshold: 0.2
+                dynamic_threshold: 0.1 // Maximum intelligence grounding
               }
             }
           }],
           generationConfig: {
-            temperature: 0.1,
+            temperature: 0.05, // High precision
             responseMimeType: 'application/json',
-            // ─── SCHEMA ENFORCEMENT ───
             responseSchema: {
               type: "OBJECT",
               properties: {
@@ -95,8 +96,9 @@ Return this exact JSON:
                 dosageForm: { type: "STRING" },
                 dosageInstructions: { type: "STRING" },
                 warnings: { type: "STRING" },
-                expiryPattern: { type: "STRING" },
+                storage: { type: "STRING" },
                 confidenceScore: { type: "NUMBER" },
+                confidenceRationale: { type: "STRING" },
                 originVerified: { type: "BOOLEAN" }
               },
               required: ["drugName", "confidenceScore", "originVerified"]
@@ -108,12 +110,11 @@ Return this exact JSON:
 
     const geminiData = await geminiResponse.json();
     
-    // Check for safety blocks
     if (geminiData.promptFeedback?.blockReason) {
        return res.status(200).json({
           drugName: "Identification Restricted",
           confidenceScore: 0,
-          indication: "The vision engine's safety filters restricted this identification. This often happens with loose pills without packaging.",
+          indication: "The intelligence engine's clinical safety filters restricted this identification. This occurs when the image content is highly ambiguous.",
           originVerified: false,
           authentic: false
        });
@@ -122,26 +123,18 @@ Return this exact JSON:
     const rawResult = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!rawResult) {
-      return res.status(200).json({
-        drugName: "Unable to Identify",
-        confidenceScore: 0,
-        indication: "No clear pharmaceutical markers detected. Please try an image with a clearer label or higher contrast.",
-        originVerified: false,
-        authentic: false
-      });
+      throw new Error('Intelligence engine returned an empty response.');
     }
 
     const visionResult = JSON.parse(rawResult);
     visionResult.analysisTimestamp = new Date().toISOString();
     visionResult.ocrEnhanced = extractedText.length > 0;
-    
-    // Map internal 'authentic' state based on AI confidence
     visionResult.authentic = visionResult.confidenceScore >= 80 && visionResult.originVerified;
 
     return res.status(200).json(visionResult);
 
   } catch (err) {
-    console.error('MedVision API Failure:', err.message);
-    return res.status(500).json({ error: "Intelligence Engine Unavailable", details: err.message });
+    console.error('MedVision Intelligence Failure:', err.message);
+    return res.status(500).json({ error: "Clinical Engine Unavailable", details: err.message });
   }
 }
