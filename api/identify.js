@@ -32,14 +32,16 @@ export default async function handler(req, res) {
       console.warn('OCR Skip:', e.message);
     }
 
-    // ─── STAGE 2: UNFETTERED AI REASONING ───
-    // We use v1beta for access to safety control and search tools.
-    const prompt = `Identify the medication in this image. 
-Context from label: "${extractedText}"
-You are a pharmaceutical verification tool. Provide factual identification. 
-If unsure, use your search tool to verify the manufacturer and generic name.
+    // ─── STAGE 2: ADVANCED PHARMA REASONING ───
+    const prompt = `You are a professional pharmaceutical identification tool. 
+Task: Identify the medication in this image (it may be a bottle, a box, or loose pills).
+Context from OCR: "${extractedText}"
 
-Return ONLY a JSON object:
+If loose pills are shown: Identify them by color, shape, and any imprints (e.g., "M367", "WATSON"). 
+If you are uncertain: Provide your best professional identification based on visual characteristics. 
+CRITICAL: You must ALWAYS return a JSON object. If identification is impossible, set drugName to "Unknown Medication" and provide a visual description in the indication field.
+
+Return this exact JSON:
 {
   "drugName": "string",
   "genericName": "string",
@@ -49,7 +51,7 @@ Return ONLY a JSON object:
   "dosageInstructions": "string",
   "warnings": "string",
   "expiryPattern": "string",
-  "confidenceScore": number (0-100),
+  "confidenceScore": number,
   "originVerified": boolean
 }`;
 
@@ -65,25 +67,40 @@ Return ONLY a JSON object:
               { inline_data: { mime_type: mimeType, data: image } }
             ]
           }],
-          // ─── DISABLE SAFETY FILTERS ───
           safetySettings: [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
             { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
           ],
-          // ─── ENABLE GOOGLE SEARCH GROUNDING ───
           tools: [{
             google_search_retrieval: {
               dynamic_retrieval_config: {
                 mode: "MODE_DYNAMIC",
-                dynamic_threshold: 0.1
+                dynamic_threshold: 0.2
               }
             }
           }],
           generationConfig: {
-            temperature: 0.2,
-            responseMimeType: 'application/json'
+            temperature: 0.1,
+            responseMimeType: 'application/json',
+            // ─── SCHEMA ENFORCEMENT ───
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                drugName: { type: "STRING" },
+                genericName: { type: "STRING" },
+                manufacturer: { type: "STRING" },
+                indication: { type: "STRING" },
+                dosageForm: { type: "STRING" },
+                dosageInstructions: { type: "STRING" },
+                warnings: { type: "STRING" },
+                expiryPattern: { type: "STRING" },
+                confidenceScore: { type: "NUMBER" },
+                originVerified: { type: "BOOLEAN" }
+              },
+              required: ["drugName", "confidenceScore", "originVerified"]
+            }
           }
         })
       }
@@ -91,36 +108,40 @@ Return ONLY a JSON object:
 
     const geminiData = await geminiResponse.json();
     
-    // Check if Gemini blocked the response despite our settings
+    // Check for safety blocks
     if (geminiData.promptFeedback?.blockReason) {
-      throw new Error(`Gemini Safety Block: ${geminiData.promptFeedback.blockReason}`);
+       return res.status(200).json({
+          drugName: "Identification Restricted",
+          confidenceScore: 0,
+          indication: "The vision engine's safety filters restricted this identification. This often happens with loose pills without packaging.",
+          originVerified: false,
+          authentic: false
+       });
     }
 
-    let rawResult = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+    const rawResult = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
     
-    // ─── FALLSAFE PARSING ───
     if (!rawResult) {
-      // If candidates are empty but no block reason, the model might have returned an empty part.
       return res.status(200).json({
-        drugName: "Unidentified",
+        drugName: "Unable to Identify",
         confidenceScore: 0,
-        authentic: false,
-        error: "Vision engine could not process this specific image content."
+        indication: "No clear pharmaceutical markers detected. Please try an image with a clearer label or higher contrast.",
+        originVerified: false,
+        authentic: false
       });
     }
 
     const visionResult = JSON.parse(rawResult);
     visionResult.analysisTimestamp = new Date().toISOString();
     visionResult.ocrEnhanced = extractedText.length > 0;
+    
+    // Map internal 'authentic' state based on AI confidence
+    visionResult.authentic = visionResult.confidenceScore >= 80 && visionResult.originVerified;
 
     return res.status(200).json(visionResult);
 
   } catch (err) {
-    console.error('MedVision Critical Failure:', err.message);
-    return res.status(500).json({ 
-      error: "MedVision Intelligence Failure",
-      details: err.message,
-      authentic: false 
-    });
+    console.error('MedVision API Failure:', err.message);
+    return res.status(500).json({ error: "Intelligence Engine Unavailable", details: err.message });
   }
 }
