@@ -139,7 +139,19 @@ function setupEventListeners() {
 
   // ── PDF Download ──
   if (els.btnDownloadPdf) {
-    els.btnDownloadPdf.addEventListener('click', generatePDFReport);
+    els.btnDownloadPdf.addEventListener('click', async () => {
+      const result = appState.get('lastResult');
+      if (!result) return;
+      
+      const originalHTML = els.btnDownloadPdf.innerHTML;
+      els.btnDownloadPdf.innerHTML = '<span class="btn-spinner" style="width:14px;height:14px;border-width:2px;"></span> GENERATING...';
+      els.btnDownloadPdf.disabled = true;
+
+      await generatePDFReport(result);
+
+      els.btnDownloadPdf.innerHTML = originalHTML;
+      els.btnDownloadPdf.disabled = false;
+    });
   }
 }
 
@@ -406,9 +418,8 @@ function showResultCard(result) {
     </div>
   `;
 
-  // Update button
-  els.btnDownloadPdf.setAttribute('onclick', `generatePDFReport(${JSON.stringify(result).replace(/"/g, '&quot;')})`);
-
+  // Update state and icons
+  appState.set('lastResult', result);
   els.resultCard.classList.remove('hidden');
   lucide.createIcons();
 }
