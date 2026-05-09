@@ -13,11 +13,16 @@
 ###  MedSwift Vision Engine
 *   **AI-Powered Identification**: Leverages Gemini 1.5 Flash for zero-shot classification of medication from live video or image uploads.
 *   **Truth Report™**: Generates high-contrast, professional verification cards detailing drug identity, manufacturer authenticity, and clinical indications.
-*   **Origin Audit**: Cross-references visual data with global **openFDA** and **RxNorm** standards to ensure legitimate chain-of-custody.
+*   **Exportable Intelligence (PDF)**: Allows users to instantly generate and download official verification reports for archival, clinical consultation, or supply chain evidence.
+*   **Origin & Supply Chain Audit**: Cross-references visual data with global **openFDA** and **RxNorm** standards to validate chain-of-custody, expiry patterns, and ledger synchronization.
 
 ###  Enterprise-Grade Security
 *   **Secure API Proxy**: Architectural separation of concerns using **Vercel Serverless Functions** to shield sensitive AI keys from the client-side.
 *   **Environment-Locked Keys**: Utilizes encrypted environment variables for backend-only communication.
+
+###  Clinical Intelligence
+*   **Dosage & Indication Extraction**: Deep analysis of pharmaceutical packaging to extract indication, dosage forms, and clinical warnings.
+*   **Audit Trail**: Maintains a high-performance local history of all verifications for medical professionals to track patient safety.
 
 ###  Offline Intelligence
 *   **Visual Cache (Dexie.js)**: Implements a local IndexedDB visual signature store, enabling instant offline verification for previously identified medications.
@@ -35,6 +40,7 @@
 *   **Intelligence**: Gemini 1.5 Flash Multimodal Vision Pipeline.
 *   **Backend**: Node.js Serverless Functions (Vercel Edge).
 *   **Persistence**: Dexie.js (IndexedDB wrapper) for high-performance client-side storage.
+*   **Reporting**: html2pdf.js for client-side PDF document generation.
 *   **Iconography**: Lucide Icons for high-fidelity medical UI elements.
 *   **Design System**: "Noir" Obsidian & Teal high-contrast medical interface.
 
