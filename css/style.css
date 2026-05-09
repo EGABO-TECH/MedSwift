@@ -1747,3 +1747,64 @@ button {
     transform: translateY(0);
   }
 }
+
+/* ──────────── RESULT CARD: SCROLLABLE & ENRICHED ──────────── */
+.result-card {
+  max-height: 85%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139,47,201,0.3) transparent;
+}
+
+.result-card::-webkit-scrollbar {
+  width: 4px;
+}
+
+.result-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.result-card::-webkit-scrollbar-thumb {
+  background: rgba(139,47,201,0.3);
+  border-radius: 2px;
+}
+
+/* Unverified / danger state */
+.truth-report.unverified {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 30px rgba(220, 38, 38, 0.2) !important;
+}
+
+.truth-report.unverified .result-title {
+  color: var(--danger) !important;
+}
+
+.truth-report.unverified .result-icon-box {
+  background: rgba(220, 38, 38, 0.15) !important;
+}
+
+/* Detail title icon alignment */
+.detail-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.detail-title svg,
+.detail-title i {
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* Detail block: warning variant */
+.detail-block {
+  border-left: 2px solid transparent;
+  padding-left: 8px;
+  transition: border-color 0.2s;
+}
+
+/* data-value with icon (WHO badge) */
+.data-value i,
+.data-value svg {
+  vertical-align: middle;
+}
