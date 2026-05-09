@@ -7,11 +7,7 @@ export default async function handler(req, res) {
   const geminiApiKey = process.env.GEMINI_API_KEY;
 
   if (!geminiApiKey) {
-    return res.status(500).json({ error: 'Gemini API Key not configured' });
-  }
-
-  if (!image) {
-    return res.status(400).json({ error: 'No image data provided' });
+    return res.status(500).json({ error: 'API Key Missing' });
   }
 
   try {
@@ -30,23 +26,20 @@ export default async function handler(req, res) {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: form
       });
-
       const ocrData = await ocrResponse.json();
-      if (ocrData?.ParsedResults?.[0]?.ParsedText) {
-        extractedText = ocrData.ParsedResults[0].ParsedText.trim();
-      }
+      extractedText = ocrData?.ParsedResults?.[0]?.ParsedText || '';
     } catch (e) {
-      console.warn('OCR Pre-processor failed:', e.message);
+      console.warn('OCR Skip:', e.message);
     }
 
-    // ─── STAGE 2: STABLE VISION REASONING (Gemini 1.5 Flash) ───
-    // Using 1.5 Flash for maximum stability and widespread regional support.
-    const prompt = `Identify the medication in this image.
-${extractedText ? `Supporting text from label: "${extractedText}"` : ''}
-Extract: brand drugName, genericName, manufacturer, primary indication, dosage instructions, clinical warnings, and typical expiryPattern.
-Rate your confidence (0-100) and set originVerified:true if the manufacturer is a known pharmaceutical company.
+    // ─── STAGE 2: UNFETTERED AI REASONING ───
+    // We use v1beta for access to safety control and search tools.
+    const prompt = `Identify the medication in this image. 
+Context from label: "${extractedText}"
+You are a pharmaceutical verification tool. Provide factual identification. 
+If unsure, use your search tool to verify the manufacturer and generic name.
 
-Return ONLY this JSON:
+Return ONLY a JSON object:
 {
   "drugName": "string",
   "genericName": "string",
@@ -56,7 +49,7 @@ Return ONLY this JSON:
   "dosageInstructions": "string",
   "warnings": "string",
   "expiryPattern": "string",
-  "confidenceScore": number,
+  "confidenceScore": number (0-100),
   "originVerified": boolean
 }`;
 
@@ -72,32 +65,62 @@ Return ONLY this JSON:
               { inline_data: { mime_type: mimeType, data: image } }
             ]
           }],
+          // ─── DISABLE SAFETY FILTERS ───
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+          ],
+          // ─── ENABLE GOOGLE SEARCH GROUNDING ───
+          tools: [{
+            google_search_retrieval: {
+              dynamic_retrieval_config: {
+                mode: "MODE_DYNAMIC",
+                dynamic_threshold: 0.1
+              }
+            }
+          }],
           generationConfig: {
-            temperature: 0.1,
+            temperature: 0.2,
             responseMimeType: 'application/json'
           }
         })
       }
     );
 
-    if (!geminiResponse.ok) {
-      const errText = await geminiResponse.text();
-      throw new Error(`Gemini API ${geminiResponse.status}: ${errText}`);
+    const geminiData = await geminiResponse.json();
+    
+    // Check if Gemini blocked the response despite our settings
+    if (geminiData.promptFeedback?.blockReason) {
+      throw new Error(`Gemini Safety Block: ${geminiData.promptFeedback.blockReason}`);
     }
 
-    const geminiData = await geminiResponse.json();
-    const rawResult = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+    let rawResult = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
     
-    if (!rawResult) throw new Error('Empty AI response');
+    // ─── FALLSAFE PARSING ───
+    if (!rawResult) {
+      // If candidates are empty but no block reason, the model might have returned an empty part.
+      return res.status(200).json({
+        drugName: "Unidentified",
+        confidenceScore: 0,
+        authentic: false,
+        error: "Vision engine could not process this specific image content."
+      });
+    }
 
     const visionResult = JSON.parse(rawResult);
-    visionResult.ocrEnhanced = extractedText.length > 0;
     visionResult.analysisTimestamp = new Date().toISOString();
+    visionResult.ocrEnhanced = extractedText.length > 0;
 
     return res.status(200).json(visionResult);
 
   } catch (err) {
-    console.error('MedVision API Error:', err.message);
-    return res.status(500).json({ error: err.message });
+    console.error('MedVision Critical Failure:', err.message);
+    return res.status(500).json({ 
+      error: "MedVision Intelligence Failure",
+      details: err.message,
+      authentic: false 
+    });
   }
 }

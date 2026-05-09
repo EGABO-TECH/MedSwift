@@ -90,10 +90,17 @@ function setupEventListeners() {
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const base64Image = event.target.result;
+      let base64Image = event.target.result;
+      
+      // Optimize image for AI (Resize to max 1280px while keeping aspect ratio)
+      try {
+        base64Image = await resizeImage(base64Image, 1280);
+      } catch (e) {
+        console.warn('Image optimization skipped:', e);
+      }
       
       // Part 1: Setup UI for the uploaded asset
-      stopCamera(); // Stop live camera if running
+      stopCamera(); 
       if (scanInterval) clearInterval(scanInterval);
       
       els.uploadPreview.src = base64Image;
@@ -625,4 +632,38 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/**
+ * Resizes a base64 image to a max dimension while maintaining aspect ratio.
+ */
+function resizeImage(base64, maxDimension) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxDimension) {
+          height *= maxDimension / width;
+          width = maxDimension;
+        }
+      } else {
+        if (height > maxDimension) {
+          width *= maxDimension / height;
+          height = maxDimension;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = reject;
+    img.src = base64;
+  });
 }
