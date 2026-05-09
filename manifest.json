@@ -1,7 +1,7 @@
 {
   "name": "MedSwift — Pharmaceutical Integrity Platform",
   "short_name": "MedSwift",
-  "description": "Scan the Truth. Secure Your Health.",
+  "description": "Enterprise-grade Multimodal Computer Vision PWA for pharmaceutical verification, supply chain auditing, and clinical intelligence.",
   "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#FDFBF7",
