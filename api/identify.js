@@ -5,9 +5,10 @@ export default async function handler(req, res) {
 
   const { image, mimeType = 'image/jpeg' } = req.body;
   const geminiApiKey = process.env.GEMINI_API_KEY;
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
 
-  if (!geminiApiKey) {
-    return res.status(500).json({ error: 'API Key Missing' });
+  if (!geminiApiKey && !openRouterKey) {
+    return res.status(500).json({ error: 'No Intelligence Providers Configured (Gemini or OpenRouter)' });
   }
 
   try {
@@ -32,51 +33,41 @@ export default async function handler(req, res) {
       console.warn('OCR Skip:', e.message);
     }
 
-    // ─── STAGE 2: DUAL-MODEL RESILIENCE ENGINE ───
-    const prompt = `You are a Senior Clinical Pharmacist. Identify this medication.
+    // ─── STAGE 2: TRIPLE-TIER RESILIENCE PIPELINE ───
+    const prompt = `You are a Senior Clinical Pharmacist. Identify this medication. 
 Label context: "${extractedText}"
-Provide drug identity, generic name, manufacturer, indication, instructions, warnings, and storage.
-Return a structured JSON report.`;
+Return a JSON report with: drugName, genericName, manufacturer, indication, dosageInstructions, warnings, storage, confidenceScore (0-100), and originVerified (boolean).
+Return ONLY the raw JSON object.`;
 
-    const generationConfig = {
-      temperature: 0.1,
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: "OBJECT",
-        properties: {
-          drugName: { type: "STRING" },
-          genericName: { type: "STRING" },
-          manufacturer: { type: "STRING" },
-          indication: { type: "STRING" },
-          dosageForm: { type: "STRING" },
-          dosageInstructions: { type: "STRING" },
-          warnings: { type: "STRING" },
-          storage: { type: "STRING" },
-          confidenceScore: { type: "NUMBER" },
-          confidenceRationale: { type: "STRING" },
-          originVerified: { type: "BOOLEAN" }
-        },
-        required: ["drugName", "confidenceScore", "originVerified"]
-      }
-    };
-
-    const safetySettings = [
-      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-    ];
-
-    // Attempt 1: Gemini 1.5 Pro (The Expert)
     let visionResult = null;
-    try {
-      console.log('MedVision: Attempting Expert Analysis (1.5 Pro)...');
-      visionResult = await callGemini('gemini-1.5-pro', prompt, image, mimeType, geminiApiKey, generationConfig, safetySettings);
-    } catch (err) {
-      console.warn('Expert Analysis throttled or unavailable. Falling back to High-Speed Engine...');
-      // Attempt 2: Gemini 1.5 Flash (The Sentinel)
-      visionResult = await callGemini('gemini-1.5-flash', prompt, image, mimeType, geminiApiKey, generationConfig, safetySettings);
-      visionResult.engine = "High-Speed Sentinel";
+    let errors = [];
+
+    // TIER 1: Gemini 1.5 Pro (Direct)
+    if (geminiApiKey) {
+      try {
+        console.log('Tier 1: Attempting Google Pro...');
+        visionResult = await callGemini('gemini-1.5-pro', prompt, image, mimeType, geminiApiKey);
+      } catch (e) { errors.push(`Pro: ${e.message}`); }
+    }
+
+    // TIER 2: Gemini 1.5 Flash (Direct)
+    if (!visionResult && geminiApiKey) {
+      try {
+        console.log('Tier 2: Falling back to Google Flash...');
+        visionResult = await callGemini('gemini-1.5-flash', prompt, image, mimeType, geminiApiKey);
+      } catch (e) { errors.push(`Flash: ${e.message}`); }
+    }
+
+    // TIER 3: OpenRouter (Claude 3.5 Sonnet) - The Ultimate Safety Net
+    if (!visionResult && openRouterKey) {
+      try {
+        console.log('Tier 3: Activating OpenRouter Nuclear Option (Claude 3.5 Sonnet)...');
+        visionResult = await callOpenRouter('anthropic/claude-3.5-sonnet', prompt, image, mimeType, openRouterKey);
+      } catch (e) { errors.push(`OpenRouter: ${e.message}`); }
+    }
+
+    if (!visionResult) {
+      throw new Error(`All intelligence providers failed. Errors: ${errors.join(' | ')}`);
     }
 
     visionResult.analysisTimestamp = new Date().toISOString();
@@ -86,15 +77,15 @@ Return a structured JSON report.`;
     return res.status(200).json(visionResult);
 
   } catch (err) {
-    console.error('MedVision Critical Failure:', err.message);
-    return res.status(500).json({ error: "Intelligence Engine Unavailable", details: err.message });
+    console.error('MedVision System-Wide Failure:', err.message);
+    return res.status(500).json({ error: "Intelligence Network Unavailable", details: err.message });
   }
 }
 
 /**
- * Helper to call a specific Gemini model
+ * Native Google Gemini Call
  */
-async function callGemini(modelName, prompt, imageData, mimeType, apiKey, config, safety) {
+async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
     {
@@ -107,22 +98,50 @@ async function callGemini(modelName, prompt, imageData, mimeType, apiKey, config
             { inline_data: { mime_type: mimeType, data: imageData } }
           ]
         }],
-        safetySettings: safety,
-        generationConfig: config
+        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
       })
     }
   );
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Model ${modelName} failed with ${response.status}: ${errorBody}`);
-  }
-
+  if (!response.ok) throw new Error(await response.text());
   const data = await response.json();
-  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!rawText) throw new Error(`Model ${modelName} returned empty response`);
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const res = JSON.parse(text);
+  res.engine = modelName === 'gemini-1.5-pro' ? 'Elite Clinical Expert' : 'High-Speed Sentinel';
+  return res;
+}
 
-  const result = JSON.parse(rawText);
-  result.engine = modelName === 'gemini-1.5-pro' ? "Elite Clinical Expert" : "High-Speed Sentinel";
-  return result;
+/**
+ * OpenRouter Multi-Model Call
+ */
+async function callOpenRouter(modelName, prompt, imageData, mimeType, apiKey) {
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://medswift.app", // Optional
+      "X-Title": "MedSwift Vision"
+    },
+    body: JSON.stringify({
+      "model": modelName,
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            { "type": "text", "text": prompt },
+            { "type": "image_url", "image_url": { "url": `data:${mimeType};base64,${imageData}` } }
+          ]
+        }
+      ],
+      "response_format": { "type": "json_object" }
+    })
+  });
+
+  if (!response.ok) throw new Error(await response.text());
+  const data = await response.json();
+  const text = data.choices[0].message.content;
+  const res = JSON.parse(text);
+  res.engine = `Global Auditor (${modelName.split('/')[1]})`;
+  return res;
 }
