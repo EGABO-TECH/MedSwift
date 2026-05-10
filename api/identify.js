@@ -91,6 +91,10 @@ Return ONLY the raw JSON object.`;
     }
 
     if (!visionResult) {
+      const isQuotaError = errors.some(e => e.includes('QuotaFailure') || e.includes('429'));
+      if (isQuotaError) {
+        throw new Error("Intelligence Network Quota Exceeded. Please try again in a minute.");
+      }
       throw new Error(`All intelligence providers failed. Errors: ${errors.join(' | ')}`);
     }
 

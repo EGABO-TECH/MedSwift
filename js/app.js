@@ -513,6 +513,7 @@ function showInlineError(message) {
     color: #EF4444; padding: 8px 16px; border-radius: 6px; font-size: 11px;
     font-family: 'DM Sans', sans-serif; font-weight: 500; z-index: 20;
     white-space: nowrap; backdrop-filter: blur(8px);
+    max-width: 90%; overflow: hidden; text-overflow: ellipsis;
   `;
   el.textContent = `⚠ ${message}`;
   els.resultCard.parentElement.appendChild(el);
