@@ -613,7 +613,7 @@ function renderAuditTrail() {
  * Constructing a clean, high-contrast template specifically for PDF.
  */
 async function generatePDFReport(result) {
-  // Pre-load logo as base64 to avoid CORS/path failures in html2canvas
+  // 1. Pre-load logo as base64 to ensure it renders in the isolated PDF context
   let logoTag = '<div style="width:48px;height:48px;background:#10B981;border-radius:8px;display:inline-block;"></div>';
   try {
     const logoResp = await fetch('Assets/MedSwift-Symbol.png');
@@ -628,195 +628,141 @@ async function generatePDFReport(result) {
     }
   } catch (e) { console.warn('PDF logo skipped:', e); }
 
-  const reportEl = document.createElement('div');
-  // Use opacity:0 NOT visibility:hidden — html2canvas renders opacity:0 elements correctly.
-  // visibility:hidden and off-screen positioning both cause blank canvases.
-  reportEl.style.cssText = `
-    width: 680px;
-    background: #FFFFFF;
-    color: #111111;
-    font-family: Arial, sans-serif;
-    position: fixed;
-    top: 0;
-    left: 0;
-    opacity: 1;
-    z-index: -9999;
-    pointer-events: none;
-    padding: 50px;
-    box-sizing: border-box;
-  `;
-
-  // NOTE: All layout uses <table> NOT flex/grid.
-  // html2canvas has known, unfixed bugs with CSS Grid and Flexbox
-  // that cause entire sections to be dropped or rendered blank.
-  const drugName      = escapeHtml(result.drugName || 'Unknown');
-  const manufacturer  = escapeHtml(result.manufacturer || 'Unverified');
-  const origin        = result.originVerified ? 'Verified' : 'Unverified';
+  // 2. Prepare data with safe escaping
+  const drugName       = escapeHtml(result.drugName || 'Unknown');
+  const manufacturer   = escapeHtml(result.manufacturer || 'Unverified');
+  const origin         = result.originVerified ? 'Verified' : 'Unverified';
   const classification = escapeHtml(result.therapeuticClass || 'Uncategorized');
-  const indication    = escapeHtml(result.indication || 'Symptom management');
-  const dosage        = escapeHtml(result.dosageInstructions || 'Verify with a licensed pharmacist.');
-  const nudge         = escapeHtml(result.lifestyleNudge || '');
-  const confidence    = result.confidenceScore || 0;
-  const status        = result.authentic ? 'AUTHENTIC' : 'UNVERIFIED';
-  const warnings      = escapeHtml(result.warnings || 'None detected.');
-  const interaction   = escapeHtml(result.proactiveInsight || 'No known conflicts detected.');
-  const refNo         = `MV-${Date.now()}`;
-  const dateStr       = new Date().toLocaleString();
+  const indication     = escapeHtml(result.indication || 'Symptom management');
+  const dosage         = escapeHtml(result.dosageInstructions || 'Verify with a licensed pharmacist.');
+  const nudge          = escapeHtml(result.lifestyleNudge || '');
+  const confidence     = result.confidenceScore || 0;
+  const status         = result.authentic ? 'AUTHENTIC' : 'UNVERIFIED';
+  const warnings       = escapeHtml(result.warnings || 'None detected.');
+  const interaction    = escapeHtml(result.proactiveInsight || 'No known conflicts detected.');
+  const refNo          = `MV-${Date.now()}`;
+  const dateStr        = new Date().toLocaleString();
 
-  reportEl.innerHTML = `
-    <table width="580" cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-serif;">
+  // 3. Construct self-contained HTML String
+  // Using an HTML string instead of a DOM element bypasses all visibility/scrolling issues.
+  const htmlString = `
+    <div style="width: 680px; padding: 50px; background: #FFFFFF; color: #111111; font-family: Arial, sans-serif; box-sizing: border-box;">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <!-- HEADER -->
+        <tr>
+          <td style="padding-bottom: 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td width="60" valign="middle">${logoTag}</td>
+                <td valign="middle" style="padding-left: 16px;">
+                  <div style="font-size: 18px; font-weight: 700; color: #111; text-transform: uppercase; letter-spacing: 3px;">MedSwift Vision</div>
+                  <div style="font-size: 10px; color: #6B7280; text-transform: uppercase; letter-spacing: 2px; margin-top: 3px;">Truth Report</div>
+                </td>
+                <td valign="middle" align="right">
+                  <div style="font-size: 9px; color: #9CA3AF;">Ref: ${refNo}</div>
+                  <div style="font-size: 9px; color: #9CA3AF; margin-top: 2px;">${dateStr}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr><td height="2" bgcolor="#F97316" style="font-size:0;line-height:0;padding-bottom:32px;">&nbsp;</td></tr>
+        
+        <!-- PROFILE -->
+        <tr>
+          <td style="padding-bottom: 28px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top: 1px solid #E5E7EB; border-bottom: 1px solid #E5E7EB;">
+              <tr>
+                <td width="50%" valign="top" style="padding: 16px 16px 16px 0;">
+                  <div style="font-size: 9px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px;">Product</div>
+                  <div style="font-size: 22px; font-weight: 700; color: #111;">${drugName}</div>
+                </td>
+                <td width="50%" valign="top" style="padding: 16px 0 16px 16px; border-left: 1px solid #E5E7EB;">
+                  <div style="margin-bottom: 10px;">
+                    <div style="font-size: 9px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px;">Manufacturer & Origin</div>
+                    <div style="font-size: 12px; font-weight: 500; color: #111;">${manufacturer} &mdash; Origin: ${origin}</div>
+                  </div>
+                  <div>
+                    <div style="font-size: 9px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px;">Classification</div>
+                    <div style="font-size: 12px; font-weight: 500; color: #111;">${classification}</div>
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
 
-      <!-- HEADER ROW -->
-      <tr>
-        <td style="padding-bottom: 20px;">
-          <table width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr>
-              <td width="60" valign="middle">${logoTag}</td>
-              <td valign="middle" style="padding-left: 16px;">
-                <div style="font-size: 18px; font-weight: 700; color: #111; text-transform: uppercase; letter-spacing: 3px;">MedSwift Vision</div>
-                <div style="font-size: 10px; color: #6B7280; text-transform: uppercase; letter-spacing: 2px; margin-top: 3px;">Truth Report</div>
-              </td>
-              <td valign="middle" align="right">
-                <div style="font-size: 9px; color: #9CA3AF;">Ref: ${refNo}</div>
-                <div style="font-size: 9px; color: #9CA3AF; margin-top: 2px;">${dateStr}</div>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
+        <!-- ANALYSIS -->
+        <tr><td style="padding-bottom: 12px; font-size: 10px; font-weight: 700; color: #111; text-transform: uppercase; letter-spacing: 3px;">The Truth Analysis</td></tr>
+        <tr>
+          <td style="padding-bottom: 28px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr valign="top">
+                <td width="32%" style="background: #F9FAFB; border: 1px solid #F0F0F0; padding: 16px;">
+                  <div style="font-size: 9px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">The Purpose</div>
+                  <div style="font-size: 11px; color: #374151; line-height: 1.6;">Targeting primary indications. Designed to assist with ${indication}.</div>
+                </td>
+                <td width="2%">&nbsp;</td>
+                <td width="32%" style="background: #F9FAFB; border: 1px solid #F0F0F0; padding: 16px;">
+                  <div style="font-size: 9px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">The Protocol</div>
+                  <div style="font-size: 11px; color: #374151; line-height: 1.6;">${dosage} ${nudge}</div>
+                </td>
+                <td width="2%">&nbsp;</td>
+                <td width="32%" style="background: #F9FAFB; border: 1px solid #F0F0F0; padding: 16px;">
+                  <div style="font-size: 9px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">The Verification</div>
+                  <div style="font-size: 11px; color: #374151; line-height: 1.6;">Confidence Score: <strong>${confidence}%</strong>. Status: <strong>${status}</strong>.</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
 
-      <!-- ORANGE STATUS BAR -->
-      <tr>
-        <td style="padding-bottom: 32px;">
-          <table width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr><td height="2" bgcolor="#F97316" style="font-size:0;line-height:0;">&nbsp;</td></tr>
-          </table>
-        </td>
-      </tr>
+        <!-- SAFETY -->
+        <tr>
+          <td style="padding-bottom: 40px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td width="3" bgcolor="#F97316" style="font-size:0;">&nbsp;</td>
+                <td style="padding-left: 16px;">
+                  <div style="font-size: 10px; font-weight: 700; color: #111; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 14px;">Safety Insights</div>
+                  <div style="font-size: 9px; font-weight: 700; color: #F97316; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Critical Avoidance:</div>
+                  <div style="font-size: 11px; color: #374151; margin-bottom: 12px;">${warnings}</div>
+                  <div style="font-size: 9px; font-weight: 700; color: #F97316; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Potential Interaction:</div>
+                  <div style="font-size: 11px; color: #374151;">${interaction}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
 
-      <!-- A. IDENTIFICATION PROFILE -->
-      <tr>
-        <td style="padding-bottom: 28px;">
-          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top: 1px solid #E5E7EB; border-bottom: 1px solid #E5E7EB;">
-            <tr>
-              <td width="50%" valign="top" style="padding: 16px 16px 16px 0;">
-                <div style="font-size: 9px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px;">Product</div>
-                <div style="font-size: 22px; font-weight: 700; color: #111;">${drugName}</div>
-              </td>
-              <td width="50%" valign="top" style="padding: 16px 0 16px 16px; border-left: 1px solid #E5E7EB;">
-                <div style="margin-bottom: 10px;">
-                  <div style="font-size: 9px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px;">Manufacturer &amp; Origin</div>
-                  <div style="font-size: 12px; font-weight: 500; color: #111;">${manufacturer} &mdash; Origin: ${origin}</div>
-                </div>
-                <div>
-                  <div style="font-size: 9px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px;">Classification</div>
-                  <div style="font-size: 12px; font-weight: 500; color: #111;">${classification}</div>
-                </div>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-
-      <!-- B. TRUTH ANALYSIS HEADER -->
-      <tr>
-        <td style="padding-bottom: 12px;">
-          <div style="font-size: 10px; font-weight: 700; color: #111; text-transform: uppercase; letter-spacing: 3px;">The Truth Analysis</div>
-        </td>
-      </tr>
-
-      <!-- B. THREE PILLAR TABLE -->
-      <tr>
-        <td style="padding-bottom: 28px;">
-          <table width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr valign="top">
-              <td width="33%" style="background: #F9FAFB; border: 1px solid #F0F0F0; padding: 16px;">
-                <div style="font-size: 9px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">The Purpose</div>
-                <div style="font-size: 11px; color: #374151; line-height: 1.6;">Targeting primary indications. Designed to assist with ${indication}.</div>
-              </td>
-              <td width="1%" style="padding: 0 6px;">&nbsp;</td>
-              <td width="33%" style="background: #F9FAFB; border: 1px solid #F0F0F0; padding: 16px;">
-                <div style="font-size: 9px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">The Protocol</div>
-                <div style="font-size: 11px; color: #374151; line-height: 1.6;">${dosage} ${nudge}</div>
-              </td>
-              <td width="1%" style="padding: 0 6px;">&nbsp;</td>
-              <td width="33%" style="background: #F9FAFB; border: 1px solid #F0F0F0; padding: 16px;">
-                <div style="font-size: 9px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">The Verification</div>
-                <div style="font-size: 11px; color: #374151; line-height: 1.6;">Confidence Score: <strong>${confidence}%</strong>. Status: <strong>${status}</strong>.</div>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-
-      <!-- C. SAFETY INSIGHTS -->
-      <tr>
-        <td style="padding-bottom: 40px;">
-          <table width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr>
-              <td width="3" bgcolor="#F97316" style="font-size:0;">&nbsp;</td>
-              <td style="padding-left: 16px;">
-                <div style="font-size: 10px; font-weight: 700; color: #111; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 14px;">Safety Insights</div>
-                <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                  <tr>
-                    <td style="padding-bottom: 10px;">
-                      <span style="font-size: 9px; font-weight: 700; color: #F97316; text-transform: uppercase; letter-spacing: 1px;">Critical Avoidance: </span>
-                      <span style="font-size: 11px; color: #374151;">${warnings}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <span style="font-size: 9px; font-weight: 700; color: #F97316; text-transform: uppercase; letter-spacing: 1px;">Potential Interaction: </span>
-                      <span style="font-size: 11px; color: #374151;">${interaction}</span>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-
-      <!-- FOOTER -->
-      <tr>
-        <td style="border-top: 1px solid #E5E7EB; padding-top: 16px;">
-          <div style="font-size: 8px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.6;">
-            Informational Use Only: MedSwift AI identification is cross-referenced with global pharma datasets. This is not medical advice. Always consult a professional before consumption.
-          </div>
-        </td>
-      </tr>
-
-    </table>
+        <!-- FOOTER -->
+        <tr>
+          <td style="border-top: 1px solid #E5E7EB; padding-top: 16px;">
+            <div style="font-size: 8px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.6;">
+              Informational Use Only: MedSwift AI identification is cross-referenced with global pharma datasets. This is not medical advice. Always consult a professional before consumption.
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
   `;
 
-  document.body.appendChild(reportEl);
-
-  // Allow browser to fully paint the element before html2canvas captures it
-  await new Promise(resolve => setTimeout(resolve, 400));
-
+  // 4. Trigger PDF Generation via htmlString
   const opt = {
-    margin:      [8, 8, 8, 8],
-    filename:    `MedVision_Audit_${(result.drugName || 'Unknown').replace(/\s/g, '_')}_${Date.now()}.pdf`,
-    image:       { type: 'jpeg', quality: 0.98 },
-    html2canvas: {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      windowWidth: 780,
-      backgroundColor: '#FFFFFF',
-      scrollX: 0,
-      scrollY: 0
-    },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    margin:       [10, 10, 10, 10],
+    filename:     `MedVision_Audit_${(result.drugName || 'Unknown').replace(/\s/g, '_')}_${Date.now()}.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true, logging: false },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
 
   try {
-    await html2pdf().from(reportEl).set(opt).save();
+    // Using string-based rendering is the most reliable way to prevent blank pages
+    // as it creates its own isolated rendering context.
+    await html2pdf().set(opt).from(htmlString).save();
   } catch (err) {
     console.error('PDF Engine Failure:', err);
-    alert('PDF Generation failed. Please try again.');
-  } finally {
-    document.body.removeChild(reportEl);
+    alert('PDF Generation failed. Please check your internet connection and try again.');
   }
 }
 
