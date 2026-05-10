@@ -102,7 +102,7 @@ Return ONLY the raw JSON object.`;
 
   } catch (err) {
     console.error('MedVision System-Wide Failure:', err.message);
-    return res.status(500).json({ error: "Intelligence Network Unavailable", details: err.message });
+    return res.status(500).json({ error: err.message, details: err.stack });
   }
 }
 
@@ -130,12 +130,19 @@ async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
   if (!response.ok) throw new Error(await response.text());
   const data = await response.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  let cleanText = text.trim();
-  if (cleanText.startsWith('```json')) {
-    cleanText = cleanText.replace(/^```json/, '').replace(/```$/, '').trim();
-  } else if (cleanText.startsWith('```')) {
-    cleanText = cleanText.replace(/^```/, '').replace(/```$/, '').trim();
+  let cleanText = text;
+  
+  // Robustly extract JSON block even if conversational text is present
+  const jsonMatch = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (jsonMatch) {
+    cleanText = jsonMatch[1];
+  } else {
+    const braceMatch = cleanText.match(/\{[\s\S]*\}/);
+    if (braceMatch) {
+      cleanText = braceMatch[0];
+    }
   }
+  
   const res = JSON.parse(cleanText);
   res.engine = modelName === 'gemini-2.5-pro' ? 'Elite Clinical Expert' : 'High-Speed Sentinel';
   return res;
