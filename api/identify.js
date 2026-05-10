@@ -66,19 +66,19 @@ Return ONLY the raw JSON object.`;
     let visionResult = null;
     let errors = [];
 
-    // TIER 1: Gemini 1.5 Pro (Direct)
+    // TIER 1: Gemini 2.5 Pro (Direct)
     if (geminiApiKey) {
       try {
         console.log('Tier 1: Attempting Google Pro...');
-        visionResult = await callGemini('gemini-1.5-pro', prompt, image, mimeType, geminiApiKey);
+        visionResult = await callGemini('gemini-2.5-pro', prompt, image, mimeType, geminiApiKey);
       } catch (e) { errors.push(`Pro: ${e.message}`); }
     }
 
-    // TIER 2: Gemini 1.5 Flash (Direct)
+    // TIER 2: Gemini 2.5 Flash (Direct)
     if (!visionResult && geminiApiKey) {
       try {
         console.log('Tier 2: Falling back to Google Flash...');
-        visionResult = await callGemini('gemini-1.5-flash', prompt, image, mimeType, geminiApiKey);
+        visionResult = await callGemini('gemini-2.5-flash', prompt, image, mimeType, geminiApiKey);
       } catch (e) { errors.push(`Flash: ${e.message}`); }
     }
 
@@ -129,9 +129,15 @@ async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
 
   if (!response.ok) throw new Error(await response.text());
   const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  const res = JSON.parse(text);
-  res.engine = modelName === 'gemini-1.5-pro' ? 'Elite Clinical Expert' : 'High-Speed Sentinel';
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  let cleanText = text.trim();
+  if (cleanText.startsWith('```json')) {
+    cleanText = cleanText.replace(/^```json/, '').replace(/```$/, '').trim();
+  } else if (cleanText.startsWith('```')) {
+    cleanText = cleanText.replace(/^```/, '').replace(/```$/, '').trim();
+  }
+  const res = JSON.parse(cleanText);
+  res.engine = modelName === 'gemini-2.5-pro' ? 'Elite Clinical Expert' : 'High-Speed Sentinel';
   return res;
 }
 
