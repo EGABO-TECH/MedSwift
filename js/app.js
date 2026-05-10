@@ -639,7 +639,7 @@ async function generatePDFReport(result) {
     position: fixed;
     top: 0;
     left: 0;
-    opacity: 0;
+    opacity: 1;
     z-index: -9999;
     pointer-events: none;
     padding: 50px;
