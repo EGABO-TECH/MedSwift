@@ -43,6 +43,26 @@ const els = {
 document.addEventListener('DOMContentLoaded', async () => {
   await seedDemoData();
   setupEventListeners();
+
+  // ─── AUGUST INTELLIGENCE INITIALIZATION ───
+  // Request Notification permission for Empathetic Nudges & Alerts
+  if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+    // We delay the request slightly so it doesn't block the initial render
+    setTimeout(() => {
+      Notification.requestPermission();
+    }, 3000);
+  }
+  
+  // Trigger Background Agent Check
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready.then(registration => {
+      if (registration.active) {
+        // Send the offline history to the background agent for cross-referencing
+        const history = appState.get('scanHistory') || [];
+        registration.active.postMessage({ type: 'TRIGGER_AGENT_CHECK', history });
+      }
+    });
+  }
 });
 
 // ─── EVENT LISTENERS ───
@@ -385,10 +405,34 @@ function showResultCard(result) {
   const hasWarning    = result.warnings && result.warnings !== 'null';
 
   els.resultDetailsBox.innerHTML = `
+    ${result.isEssentialMedicine ? `
+    <div class="detail-block" style="border: 1px solid rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05);">
+      <div class="detail-title" style="color: #10B981;"><i data-lucide="star"></i> WHO Essential Medicine</div>
+      <div class="detail-text" style="color: #10B981; font-weight: 500;">Listed on the WHO Model List of Essential Medicines.</div>
+    </div>` : ''}
+
     ${hasIndication ? `
     <div class="detail-block">
       <div class="detail-title"><i data-lucide="activity"></i> Primary Indication</div>
       <div class="detail-text">${escapeHtml(result.indication)}</div>
+    </div>` : ''}
+
+    ${result.pathway ? `
+    <div class="detail-block">
+      <div class="detail-title"><i data-lucide="microscope"></i> Mechanism / Pathway</div>
+      <div class="detail-text">${escapeHtml(result.pathway)}</div>
+    </div>` : ''}
+
+    ${result.therapeuticClass ? `
+    <div class="detail-block">
+      <div class="detail-title"><i data-lucide="bookmark"></i> Therapeutic Class</div>
+      <div class="detail-text" style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">${escapeHtml(result.therapeuticClass)}</div>
+    </div>` : ''}
+
+    ${result.regulatoryStatus ? `
+    <div class="detail-block">
+      <div class="detail-title"><i data-lucide="globe"></i> Regulatory Status</div>
+      <div class="detail-text" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--teal-primary);">${escapeHtml(result.regulatoryStatus)}</div>
     </div>` : ''}
 
     ${hasWarning ? `
@@ -401,6 +445,27 @@ function showResultCard(result) {
     <div class="detail-block">
       <div class="detail-title"><i data-lucide="pill"></i> Dosage Instructions</div>
       <div class="detail-text">${escapeHtml(result.dosageInstructions)}</div>
+    </div>` : ''}
+
+    ${result.lifestyleNudge ? `
+    <div class="detail-block" style="background: rgba(16, 185, 129, 0.05); border-left: 3px solid #10B981; border-radius: 4px; padding-left: 12px;">
+      <div class="detail-title" style="color: #10B981;"><i data-lucide="heart"></i> Clinical Companion Nudge</div>
+      <div class="detail-text" style="font-style: italic; color: #E2E8F0;">"${escapeHtml(result.lifestyleNudge)}"</div>
+    </div>` : ''}
+
+    ${result.suggestedBiomarkers && result.suggestedBiomarkers.length > 0 ? `
+    <div class="detail-block" style="border: 1px solid rgba(13, 148, 136, 0.2); background: rgba(13, 148, 136, 0.03);">
+      <div class="detail-title" style="color: var(--teal-primary);"><i data-lucide="activity"></i> Biomarker Tracking</div>
+      <div class="detail-text" style="color: #94A3B8; font-size: 13px;">Based on this medication, consider discussing these labs with your provider:</div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
+        ${result.suggestedBiomarkers.map(b => `<span style="background: rgba(13, 148, 136, 0.15); color: #2DD4BF; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace;">${escapeHtml(b)}</span>`).join('')}
+      </div>
+    </div>` : ''}
+
+    ${result.proactiveInsight ? `
+    <div class="detail-block" style="background: rgba(234, 179, 8, 0.05); border: 1px solid rgba(234, 179, 8, 0.2);">
+      <div class="detail-title" style="color: #EAB308;"><i data-lucide="lightbulb"></i> Proactive Insight</div>
+      <div class="detail-text" style="color: #FDE047;">${escapeHtml(result.proactiveInsight)}</div>
     </div>` : ''}
 
     <div class="detail-block">
@@ -587,6 +652,7 @@ async function generatePDFReport(result) {
         <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
           <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Drug Name</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.drugName}</td></tr>
           <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Manufacturer</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.manufacturer}</td></tr>
+          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Regulatory Auth</td><td style="padding: 10px 0; font-weight: 700; text-align: right; color: #0D9488;">${result.regulatoryStatus || 'Unknown'}</td></tr>
           <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Verification Score</td><td style="padding: 10px 0; font-weight: 700; text-align: right; color: ${statusColor}">${result.confidenceScore}%</td></tr>
         </table>
       </div>
@@ -595,7 +661,8 @@ async function generatePDFReport(result) {
         <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
           <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Ledger Status</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${appState.get('currentBatch') ? 'SYNCHRONIZED' : 'INCOMPLETE'}</td></tr>
           <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Origin DB</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.originVerified ? 'VERIFIED' : 'UNVERIFIED'}</td></tr>
-          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Source</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.cached ? 'Visual Offline Cache' : 'Gemini Vision AI'}</td></tr>
+          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Class</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.therapeuticClass || 'Uncategorized'}</td></tr>
+          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">WHO Essential</td><td style="padding: 10px 0; font-weight: 700; text-align: right; color: ${result.isEssentialMedicine ? '#10B981' : '#666'}">${result.isEssentialMedicine ? 'YES' : 'NO'}</td></tr>
         </table>
       </div>
     </div>
@@ -614,10 +681,22 @@ async function generatePDFReport(result) {
         <p style="font-size: 14px; margin: 0; line-height: 1.6; color: #EF4444; font-weight: 500;">${result.warnings || 'NO CRITICAL WARNINGS DETECTED'}</p>
       </div>
 
-      <div>
+      <div style="margin-bottom: 24px;">
         <p style="font-size: 10px; font-weight: 800; color: #666; margin-bottom: 8px; text-transform: uppercase;">Standard Dosage Instructions</p>
         <p style="font-size: 14px; margin: 0; line-height: 1.6;">${result.dosageInstructions || 'Instructions not detected. Please verify with a licensed pharmacist.'}</p>
       </div>
+
+      ${result.lifestyleNudge ? `
+      <div style="margin-bottom: 24px; padding: 15px; background: #F0FDF4; border-left: 3px solid #10B981;">
+        <p style="font-size: 10px; font-weight: 800; color: #10B981; margin-bottom: 8px; text-transform: uppercase;">Clinical Companion</p>
+        <p style="font-size: 13px; font-style: italic; margin: 0; color: #065F46;">"${result.lifestyleNudge}"</p>
+      </div>` : ''}
+
+      ${result.suggestedBiomarkers && result.suggestedBiomarkers.length > 0 ? `
+      <div>
+        <p style="font-size: 10px; font-weight: 800; color: #0D9488; margin-bottom: 8px; text-transform: uppercase;">Suggested Biomarker Tracking</p>
+        <p style="font-size: 13px; margin: 0; color: #115E59;">${result.suggestedBiomarkers.join(' • ')}</p>
+      </div>` : ''}
     </div>
 
     <!-- Footer Disclaimer -->

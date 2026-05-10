@@ -127,10 +127,16 @@ export async function identifyMedication(base64Image, signal) {
       ...(localRef ? {
         dosageInstructions: localRef.dosageInstructions || visionResult.dosageInstructions,
         warnings:           localRef.warnings           || visionResult.warnings,
-        isEssentialMedicine: localRef.isEssentialMedicine ?? false,
+        isEssentialMedicine: localRef.isEssentialMedicine ?? visionResult.isEssentialMedicine ?? false,
+        lifestyleNudge:     localRef.lifestyleNudge     || visionResult.lifestyleNudge,
+        suggestedBiomarkers: localRef.suggestedBiomarkers || visionResult.suggestedBiomarkers,
+        proactiveInsight:   localRef.proactiveInsight   || visionResult.proactiveInsight,
+        therapeuticClass:   localRef.therapeuticClass   || visionResult.therapeuticClass,
+        pathway:            localRef.pathway            || visionResult.pathway,
+        regulatoryStatus:   localRef.regulatoryStatus   || visionResult.regulatoryStatus,
         localDbMatch:       true
       } : {
-        isEssentialMedicine: false,
+        isEssentialMedicine: visionResult.isEssentialMedicine ?? false,
         localDbMatch:       false
       }),
       authentic:            (visionResult.confidenceScore ?? 0) >= 80 && visionResult.originVerified,

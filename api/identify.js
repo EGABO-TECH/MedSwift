@@ -34,9 +34,33 @@ export default async function handler(req, res) {
     }
 
     // ─── STAGE 2: TRIPLE-TIER RESILIENCE PIPELINE ───
-    const prompt = `You are a Senior Clinical Pharmacist. Identify this medication. 
+    const prompt = `You are a Senior Clinical Pharmacist and Regulatory Auditor. Identify this medication based on the image and text.
 Label context: "${extractedText}"
-Return a JSON report with: drugName, genericName, manufacturer, indication, dosageInstructions, warnings, storage, confidenceScore (0-100), and originVerified (boolean).
+Cross-reference your internal knowledge with the following Gold Standard Datasets:
+1. OpenFDA & EMA for manufacturer, regulatory status, and origin.
+2. Health Canada DPD for therapeutic class.
+3. DrugBank & ChEMBL for biochemical pathway.
+4. WHO EML to check if it's a core essential medicine.
+
+Return a JSON report with: 
+- drugName (Brand name)
+- genericName
+- manufacturer
+- indication
+- dosageInstructions
+- warnings
+- storage
+- confidenceScore (0-100)
+- originVerified (boolean, verify against OpenFDA/EMA/ChEMBL)
+- confidenceRationale (Explain your reasoning)
+- regulatoryStatus (e.g., "FDA Approved, EMA Authorized")
+- therapeuticClass (e.g., from Health Canada / AHFS)
+- pathway (Biochemical mechanism from DrugBank/ChEMBL)
+- isEssentialMedicine (boolean, from WHO EML)
+- lifestyleNudge (An empathetic, human-centric suggestion on how to take the medication, e.g., "Works best with healthy fats. Try it with avocado toast.")
+- suggestedBiomarkers (Array of strings, what lab work/biomarkers to track, e.g., ["Lipid Panel", "Liver Enzymes"])
+- proactiveInsight (A proactive contextual highlight or safety insight)
+
 Return ONLY the raw JSON object.`;
 
     let visionResult = null;
