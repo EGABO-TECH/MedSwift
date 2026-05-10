@@ -181,8 +181,21 @@ async function callOpenRouter(modelName, prompt, imageData, mimeType, apiKey) {
 
   if (!response.ok) throw new Error(await response.text());
   const data = await response.json();
-  const text = data.choices[0].message.content;
-  const res = JSON.parse(text);
+  const text = data.choices[0].message.content || '{}';
+  let cleanText = text;
+  
+  // Robustly extract JSON block even if conversational text is present
+  const jsonMatch = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (jsonMatch) {
+    cleanText = jsonMatch[1];
+  } else {
+    const braceMatch = cleanText.match(/\{[\s\S]*\}/);
+    if (braceMatch) {
+      cleanText = braceMatch[0];
+    }
+  }
+  
+  const res = JSON.parse(cleanText);
   res.engine = `Global Auditor (${modelName.split('/')[1]})`;
   return res;
 }

@@ -613,98 +613,105 @@ function renderAuditTrail() {
  * Constructing a clean, high-contrast template specifically for PDF.
  */
 async function generatePDFReport(result) {
-  const isOk = result.authentic === true;
-  const statusColor = isOk ? '#10B981' : (result.manualReviewRequired ? '#EAB308' : '#EF4444');
-  const statusText = isOk ? 'AUTHENTIC' : (result.manualReviewRequired ? 'MANUAL REVIEW REQUIRED' : 'UNVERIFIED / COUNTERFEIT RISK');
-  
   // Construct the template
   const reportEl = document.createElement('div');
   reportEl.style.width = '700px';
   reportEl.style.padding = '60px';
   reportEl.style.background = '#FFFFFF';
-  reportEl.style.color = '#000000';
-  reportEl.style.fontFamily = "'Inter', sans-serif";
+  reportEl.style.color = '#111111';
+  reportEl.style.fontFamily = "'DM Sans', sans-serif";
   reportEl.style.position = 'absolute';
   reportEl.style.left = '-9999px';
   reportEl.style.top = '-9999px';
+  reportEl.style.boxSizing = 'border-box';
 
   reportEl.innerHTML = `
-    <!-- Header -->
-    <div style="border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end;">
+    <!-- 1. The Header: Identity & Authority -->
+    <div style="display: flex; align-items: center; gap: 20px; padding-bottom: 24px;">
+      <img src="Assets/MedSwift-Symbol.png" style="width: 48px; height: 48px;" alt="Logo" />
       <div>
-        <h1 style="font-family: 'Playfair Display', serif; font-size: 32px; margin: 0; letter-spacing: -1px;">MedVision Audit</h1>
-        <p style="font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; color: #666; margin-top: 5px;">Official Pharmaceutical Verification Report</p>
-      </div>
-      <div style="text-align: right;">
-        <p style="font-size: 10px; color: #999; margin: 0;">Ref No: MV-${Date.now()}</p>
-        <p style="font-size: 10px; color: #999; margin: 0;">Date: ${new Date().toLocaleString()}</p>
+        <h1 style="font-family: 'DM Sans', sans-serif; font-size: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 4px; margin: 0; color: #111;">
+          MedSwift Vision Truth Report
+        </h1>
       </div>
     </div>
+    <!-- Status Bar: Thin Orange Line -->
+    <div style="width: 100%; height: 2px; background-color: #F97316; margin-bottom: 40px;"></div>
 
-    <!-- Status Banner -->
-    <div style="background: ${statusColor}; color: #FFF; padding: 20px; border-radius: 4px; margin-bottom: 40px; text-align: center;">
-      <h2 style="margin: 0; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 4px;">REPORT STATUS: ${statusText}</h2>
-    </div>
-
-    <!-- Core Findings Grid -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px;">
-      <div>
-        <h3 style="font-size: 11px; border-bottom: 1px solid #EEE; padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">Product Identity</h3>
-        <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
-          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Drug Name</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.drugName}</td></tr>
-          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Manufacturer</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.manufacturer}</td></tr>
-          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Regulatory Auth</td><td style="padding: 10px 0; font-weight: 700; text-align: right; color: #0D9488;">${result.regulatoryStatus || 'Unknown'}</td></tr>
-          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Verification Score</td><td style="padding: 10px 0; font-weight: 700; text-align: right; color: ${statusColor}">${result.confidenceScore}%</td></tr>
-        </table>
-      </div>
-      <div>
-        <h3 style="font-size: 11px; border-bottom: 1px solid #EEE; padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">Supply Chain Intel</h3>
-        <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
-          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Ledger Status</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${appState.get('currentBatch') ? 'SYNCHRONIZED' : 'INCOMPLETE'}</td></tr>
-          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Origin DB</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.originVerified ? 'VERIFIED' : 'UNVERIFIED'}</td></tr>
-          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">Class</td><td style="padding: 10px 0; font-weight: 700; text-align: right;">${result.therapeuticClass || 'Uncategorized'}</td></tr>
-          <tr style="border-bottom: 1px solid #F9F9F9;"><td style="padding: 10px 0; color: #666;">WHO Essential</td><td style="padding: 10px 0; font-weight: 700; text-align: right; color: ${result.isEssentialMedicine ? '#10B981' : '#666'}">${result.isEssentialMedicine ? 'YES' : 'NO'}</td></tr>
-        </table>
-      </div>
-    </div>
-
-    <!-- Clinical Analysis Section -->
-    <div style="margin-bottom: 40px; background: #FBFBFC; padding: 30px; border-radius: 8px; border: 1px solid #F0F0F2;">
-      <h3 style="font-size: 11px; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; color: #666;">Intelligence Summary</h3>
+    <!-- 2. The Body: The "Truth" Section -->
+    <div style="display: flex; flex-direction: column; gap: 40px;">
       
-      <div style="margin-bottom: 24px;">
-        <p style="font-size: 10px; font-weight: 800; color: #0D9488; margin-bottom: 8px; text-transform: uppercase;">Primary Indication</p>
-        <p style="font-size: 14px; margin: 0; line-height: 1.6;">${result.indication || 'No clinical indications identified in current scan.'}</p>
+      <!-- A. Identification Profile -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid #E5E7EB; border-bottom: 1px solid #E5E7EB; padding: 20px 0;">
+        <div>
+          <p style="font-size: 10px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 4px 0;">Product</p>
+          <p style="font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; margin: 0; color: #111;">${escapeHtml(result.drugName || 'Unknown')}</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px; border-left: 1px solid #E5E7EB; padding-left: 20px;">
+          <div>
+            <p style="font-size: 9px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 2px 0;">Manufacturer & Origin</p>
+            <p style="font-size: 13px; font-weight: 500; margin: 0; color: #111;">${escapeHtml(result.manufacturer || 'Unverified')} | Origin: ${result.originVerified ? 'Verified' : 'Unverified'}</p>
+          </div>
+          <div>
+            <p style="font-size: 9px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 2px 0;">Classification</p>
+            <p style="font-size: 13px; font-weight: 500; margin: 0; color: #111;">${escapeHtml(result.therapeuticClass || 'Uncategorized')}</p>
+          </div>
+        </div>
       </div>
 
-      <div style="margin-bottom: 24px;">
-        <p style="font-size: 10px; font-weight: 800; color: #EF4444; margin-bottom: 8px; text-transform: uppercase;">Clinical Safety Warnings</p>
-        <p style="font-size: 14px; margin: 0; line-height: 1.6; color: #EF4444; font-weight: 500;">${result.warnings || 'NO CRITICAL WARNINGS DETECTED'}</p>
-      </div>
-
-      <div style="margin-bottom: 24px;">
-        <p style="font-size: 10px; font-weight: 800; color: #666; margin-bottom: 8px; text-transform: uppercase;">Standard Dosage Instructions</p>
-        <p style="font-size: 14px; margin: 0; line-height: 1.6;">${result.dosageInstructions || 'Instructions not detected. Please verify with a licensed pharmacist.'}</p>
-      </div>
-
-      ${result.lifestyleNudge ? `
-      <div style="margin-bottom: 24px; padding: 15px; background: #F0FDF4; border-left: 3px solid #10B981;">
-        <p style="font-size: 10px; font-weight: 800; color: #10B981; margin-bottom: 8px; text-transform: uppercase;">Clinical Companion</p>
-        <p style="font-size: 13px; font-style: italic; margin: 0; color: #065F46;">"${result.lifestyleNudge}"</p>
-      </div>` : ''}
-
-      ${result.suggestedBiomarkers && result.suggestedBiomarkers.length > 0 ? `
+      <!-- B. The "Truth" Analysis -->
       <div>
-        <p style="font-size: 10px; font-weight: 800; color: #0D9488; margin-bottom: 8px; text-transform: uppercase;">Suggested Biomarker Tracking</p>
-        <p style="font-size: 13px; margin: 0; color: #115E59;">${result.suggestedBiomarkers.join(' • ')}</p>
-      </div>` : ''}
+        <h2 style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; color: #111; margin: 0 0 20px 0;">The Truth Analysis</h2>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+          <!-- Pillar 1: The Purpose -->
+          <div style="background: #F9FAFB; padding: 20px; border: 1px solid #F3F4F6;">
+            <p style="font-size: 10px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 12px 0;">The Purpose</p>
+            <p style="font-size: 12px; line-height: 1.6; margin: 0; color: #374151;">
+              Targeting primary indications. Designed to assist with ${escapeHtml(result.indication || 'symptom management')}.
+            </p>
+          </div>
+          
+          <!-- Pillar 2: The Protocol -->
+          <div style="background: #F9FAFB; padding: 20px; border: 1px solid #F3F4F6;">
+            <p style="font-size: 10px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 12px 0;">The Protocol</p>
+            <p style="font-size: 12px; line-height: 1.6; margin: 0; color: #374151;">
+              ${escapeHtml(result.dosageInstructions || 'Instructions not detected.')} ${escapeHtml(result.lifestyleNudge || '')}
+            </p>
+          </div>
+
+          <!-- Pillar 3: The Verification -->
+          <div style="background: #F9FAFB; padding: 20px; border: 1px solid #F3F4F6;">
+            <p style="font-size: 10px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 12px 0;">The Verification</p>
+            <p style="font-size: 12px; line-height: 1.6; margin: 0; color: #374151;">
+              Cross-referenced internal knowledge. Confidence Score: ${result.confidenceScore}%. Status: ${result.authentic ? 'Authentic' : 'Unverified'}.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- C. Safety Insights -->
+      <div style="border-left: 3px solid #F97316; padding-left: 20px; margin-top: 10px;">
+        <h2 style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; color: #111; margin: 0 0 16px 0;">Safety Insights</h2>
+        
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <span style="font-size: 10px; font-weight: 700; color: #F97316; text-transform: uppercase; letter-spacing: 1.5px;">Critical Avoidance:</span>
+            <span style="font-size: 12px; color: #374151; margin-left: 8px;">${escapeHtml(result.warnings || 'None detected.')}</span>
+          </div>
+          <div>
+            <span style="font-size: 10px; font-weight: 700; color: #F97316; text-transform: uppercase; letter-spacing: 1.5px;">Potential Interaction:</span>
+            <span style="font-size: 12px; color: #374151; margin-left: 8px;">${escapeHtml(result.proactiveInsight || 'No known conflicts detected in current context.')}</span>
+          </div>
+        </div>
+      </div>
+
     </div>
 
-    <!-- Footer Disclaimer -->
-    <div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #EEE;">
-      <p style="font-size: 9px; color: #AAA; text-align: center; line-height: 1.6;">
-        MedVision is an AI-assisted verification tool. This report is for auditing purposes and does not constitute medical advice. 
-        Always cross-reference with professional medical laboratory results and manufacturer's official documentation.
+    <!-- 3. The Footer: The Guardrail -->
+    <div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+      <p style="font-size: 9px; color: #9CA3AF; text-align: left; line-height: 1.6; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">
+        Informational Use Only: MedSwift AI identification is cross-referenced with global pharma datasets. This is not medical advice. Always consult a professional before consumption.
       </p>
     </div>
   `;
@@ -713,7 +720,7 @@ async function generatePDFReport(result) {
 
   const opt = {
     margin:       0,
-    filename:     `MedVision_Audit_${result.drugName.replace(/\s/g, '_')}_${Date.now()}.pdf`,
+    filename:     `MedVision_Audit_${(result.drugName || 'Unknown').replace(/\s/g, '_')}_${Date.now()}.pdf`,
     image:        { type: 'jpeg', quality: 0.98 },
     html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
     jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
