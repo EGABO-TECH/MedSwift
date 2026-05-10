@@ -244,6 +244,27 @@ button {
   transform: translateX(100%);
 }
 
+@media (max-width: 480px) {
+  .nav-brand {
+    font-size: 18px;
+    gap: 8px;
+  }
+  .brand-image {
+    height: 24px;
+  }
+  .brand-text {
+    font-size: 18px;
+  }
+  .btn-contact-nav {
+    padding: 8px 16px;
+    font-size: 10px;
+  }
+  .btn-contact-nav i {
+    width: 12px;
+    height: 12px;
+  }
+}
+
 /* ──────────── CONTACT PAGE LAYOUT ──────────── */
 .contact-layout {
   display: grid;
@@ -616,8 +637,14 @@ button {
   display: flex;
   align-items: center;
   position: relative;
-  padding: 40px 0 80px;
+  padding: 24px 0 48px;
   z-index: 10;
+}
+
+@media (min-width: 768px) {
+  .app-main {
+    padding: 40px 0 80px;
+  }
 }
 
 .app-grid {
@@ -643,17 +670,24 @@ button {
 
 .hero-title {
   font-family: 'Playfair Display', serif;
-  font-size: 48px;
+  font-size: 36px;
   font-weight: 700;
   color: var(--white);
-  line-height: 1.05;
+  line-height: 1.1;
   letter-spacing: -1px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+}
+
+@media(min-width: 768px) {
+  .hero-title {
+    font-size: 52px;
+    margin-bottom: 24px;
+  }
 }
 
 @media(min-width: 1024px) {
   .hero-title {
-    font-size: 72px;
+    font-size: 68px;
   }
 }
 
@@ -817,6 +851,8 @@ button {
   width: 100%;
   max-width: 400px;
   aspect-ratio: 9/16;
+  max-height: 75vh;
+  margin: 0 auto;
   background: var(--obsidian-mid);
   border-radius: 48px;
   box-shadow: 0 40px 80px -20px rgba(13, 148, 136, 0.1), 0 0 0 1px var(--cream-border), 0 0 0 12px rgba(0, 0, 0, 0.02);
@@ -1318,12 +1354,19 @@ button {
 .ticker-item {
   display: flex;
   align-items: center;
-  padding: 0 40px;
+  padding: 0 20px;
   color: var(--pure-white);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 1px;
   text-transform: uppercase;
+}
+
+@media (min-width: 768px) {
+  .ticker-item {
+    padding: 0 40px;
+    font-size: 14px;
+  }
 }
 
 .ticker-item i {
