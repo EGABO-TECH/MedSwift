@@ -613,22 +613,43 @@ function renderAuditTrail() {
  * Constructing a clean, high-contrast template specifically for PDF.
  */
 async function generatePDFReport(result) {
-  // Construct the template
+  // Pre-load logo as base64 to avoid CORS/path failures in html2canvas
+  let logoTag = '<div style="width:48px;height:48px;background:#10B981;border-radius:8px;display:inline-block;"></div>';
+  try {
+    const logoResp = await fetch('Assets/MedSwift-Symbol.png');
+    if (logoResp.ok) {
+      const blob = await logoResp.blob();
+      const logoDataUrl = await new Promise((res) => {
+        const reader = new FileReader();
+        reader.onloadend = () => res(reader.result);
+        reader.readAsDataURL(blob);
+      });
+      logoTag = `<img src="${logoDataUrl}" style="width:48px;height:48px;" alt="Logo" />`;
+    }
+  } catch (e) { console.warn('PDF logo skipped:', e); }
+
+  // ── KEY FIX: Use visibility:hidden at top:0/left:0 so html2canvas can render it.
+  // Positioning at left:-9999px causes html2canvas to produce a blank white canvas.
   const reportEl = document.createElement('div');
-  reportEl.style.width = '700px';
-  reportEl.style.padding = '60px';
-  reportEl.style.background = '#FFFFFF';
-  reportEl.style.color = '#111111';
-  reportEl.style.fontFamily = "'DM Sans', sans-serif";
-  reportEl.style.position = 'absolute';
-  reportEl.style.left = '-9999px';
-  reportEl.style.top = '-9999px';
-  reportEl.style.boxSizing = 'border-box';
+  reportEl.style.cssText = `
+    width: 700px;
+    padding: 60px;
+    box-sizing: border-box;
+    background: #FFFFFF;
+    color: #111111;
+    font-family: 'DM Sans', sans-serif;
+    position: fixed;
+    top: 0;
+    left: 0;
+    visibility: hidden;
+    z-index: -9999;
+    pointer-events: none;
+  `;
 
   reportEl.innerHTML = `
     <!-- 1. The Header: Identity & Authority -->
     <div style="display: flex; align-items: center; gap: 20px; padding-bottom: 24px;">
-      <img src="Assets/MedSwift-Symbol.png" style="width: 48px; height: 48px;" alt="Logo" />
+      ${logoTag}
       <div>
         <h1 style="font-family: 'DM Sans', sans-serif; font-size: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 4px; margin: 0; color: #111;">
           MedSwift Vision Truth Report
@@ -718,20 +739,30 @@ async function generatePDFReport(result) {
 
   document.body.appendChild(reportEl);
 
+  // Allow the browser 300ms to fully lay out the DOM before html2canvas captures it
+  await new Promise(resolve => setTimeout(resolve, 300));
+
   const opt = {
-    margin:       0,
+    margin:       [10, 10, 10, 10],
     filename:     `MedVision_Audit_${(result.drugName || 'Unknown').replace(/\s/g, '_')}_${Date.now()}.pdf`,
     image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
-    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+    html2canvas:  {
+      scale: 2,
+      useCORS: true,
+      letterRendering: true,
+      logging: false,
+      windowWidth: 820,
+      backgroundColor: '#FFFFFF'
+    },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
 
   try {
     await html2pdf().from(reportEl).set(opt).save();
-    document.body.removeChild(reportEl);
   } catch (err) {
     console.error('PDF Engine Failure:', err);
     alert('PDF Generation failed. Please try again.');
+  } finally {
     document.body.removeChild(reportEl);
   }
 }
