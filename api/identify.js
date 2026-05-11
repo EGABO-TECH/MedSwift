@@ -114,12 +114,15 @@ Return ONLY the raw JSON object.`;
       }
     }
 
-    // TIER 3: OpenRouter (Claude 3.5 Sonnet) - The Ultimate Safety Net
+    // TIER 3: OpenRouter (Claude/Gemini) - The Ultimate Safety Net
     if (!visionResult && openRouterKey) {
       try {
-        console.log('Tier 3: Activating OpenRouter Safety Net (Claude 3.5 Sonnet)...');
-        visionResult = await callOpenRouter('anthropic/claude-3.5-sonnet', prompt, image, mimeType, openRouterKey);
-      } catch (e) { errors.push(`OpenRouter: ${e.message}`); }
+        console.log('Tier 3: Activating OpenRouter Safety Net...');
+        // Using gemini-2.0-flash-001 via OpenRouter as it is verified working for this key
+        visionResult = await callOpenRouter('google/gemini-2.0-flash-001', prompt, image, mimeType, openRouterKey);
+      } catch (e) { 
+        errors.push(`OpenRouter: ${e.message}`); 
+      }
     }
 
     if (!visionResult) {
