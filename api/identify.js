@@ -22,15 +22,20 @@ export default async function handler(req, res) {
       form.append('language', 'eng');
       form.append('OCREngine', '2');
 
+      // Timeout the OCR call at 3s so it never blocks the Gemini pipeline
+      const ocrCtrl = new AbortController();
+      const ocrTimer = setTimeout(() => ocrCtrl.abort(), 3000);
       const ocrResponse = await fetch('https://api.ocr.space/parse/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: form
+        body: form,
+        signal: ocrCtrl.signal
       });
+      clearTimeout(ocrTimer);
       const ocrData = await ocrResponse.json();
       extractedText = ocrData?.ParsedResults?.[0]?.ParsedText || '';
     } catch (e) {
-      console.warn('OCR Skip:', e.message);
+      console.warn('OCR Skip/Timeout:', e.message);
     }
 
     // ─── STAGE 2: TRIPLE-TIER RESILIENCE PIPELINE ───
@@ -66,20 +71,20 @@ Return ONLY the raw JSON object.`;
     let visionResult = null;
     let errors = [];
 
-    // TIER 1: Gemini 2.5 Pro (Direct)
+    // TIER 1: Gemini 1.5 Flash (Direct) — fastest, lowest latency
     if (geminiApiKey) {
       try {
-        console.log('Tier 1: Attempting Google Pro...');
-        visionResult = await callGemini('gemini-2.5-pro', prompt, image, mimeType, geminiApiKey);
-      } catch (e) { errors.push(`Pro: ${e.message}`); }
+        console.log('Tier 1: Attempting Gemini 1.5 Flash...');
+        visionResult = await callGemini('gemini-1.5-flash', prompt, image, mimeType, geminiApiKey);
+      } catch (e) { errors.push(`Flash: ${e.message}`); }
     }
 
-    // TIER 2: Gemini 2.5 Flash (Direct)
+    // TIER 2: Gemini 1.5 Pro (Direct) — deeper reasoning fallback
     if (!visionResult && geminiApiKey) {
       try {
-        console.log('Tier 2: Falling back to Google Flash...');
-        visionResult = await callGemini('gemini-2.5-flash', prompt, image, mimeType, geminiApiKey);
-      } catch (e) { errors.push(`Flash: ${e.message}`); }
+        console.log('Tier 2: Falling back to Gemini 1.5 Pro...');
+        visionResult = await callGemini('gemini-1.5-pro', prompt, image, mimeType, geminiApiKey);
+      } catch (e) { errors.push(`Pro: ${e.message}`); }
     }
 
     // TIER 3: OpenRouter (Claude 3.5 Sonnet) - The Ultimate Safety Net
@@ -114,22 +119,32 @@ Return ONLY the raw JSON object.`;
  * Native Google Gemini Call
  */
 async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: imageData } }
-          ]
-        }],
-        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
-      })
-    }
-  );
+  // 8-second timeout prevents Vercel's 10s limit from being breached
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+
+  let response;
+  try {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: imageData } }
+            ]
+          }],
+          generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+        })
+      }
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) throw new Error(await response.text());
   const data = await response.json();
@@ -148,7 +163,7 @@ async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
   }
   
   const res = JSON.parse(cleanText);
-  res.engine = modelName === 'gemini-2.5-pro' ? 'Elite Clinical Expert' : 'High-Speed Sentinel';
+  res.engine = modelName.includes('pro') ? 'Elite Clinical Expert' : 'High-Speed Sentinel';
   return res;
 }
 
