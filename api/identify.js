@@ -129,8 +129,9 @@ async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
 
   let response;
   try {
+    // Switching to v1 stable endpoint
     response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -142,7 +143,7 @@ async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
               { inline_data: { mime_type: mimeType, data: imageData } }
             ]
           }],
-          generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+          generationConfig: { temperature: 0.1 } // v1 might not support responseMimeType in all tiers
         })
       }
     );
