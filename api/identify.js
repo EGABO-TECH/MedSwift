@@ -123,7 +123,13 @@ Return ONLY the raw JSON object.`;
 
     visionResult.analysisTimestamp = new Date().toISOString();
     visionResult.ocrEnhanced = extractedText.length > 0;
-    visionResult.authentic = (visionResult.confidenceScore || 0) >= 80 && visionResult.originVerified;
+
+    // Bug #7 Fix: Compute both clinical flags here so the raw API response is
+    // self-consistent for any consumer (mobile clients, future integrations).
+    // scanner.js will recompute these after local DB enrichment — that's correct.
+    const cs = visionResult.confidenceScore || 0;
+    visionResult.authentic            = cs >= 80 && visionResult.originVerified === true;
+    visionResult.manualReviewRequired = cs > 0 && cs < 80;
 
     return res.status(200).json(visionResult);
 

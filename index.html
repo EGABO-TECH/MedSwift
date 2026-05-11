@@ -297,10 +297,9 @@
     </div>
   </footer>
 
-  <!-- Modules -->
-  <script type="module" src="js/state.js"></script>
-  <script type="module" src="js/db.js"></script>
-  <script type="module" src="js/scanner.js"></script>
+  <!-- Modules: Only app.js is the entry-point; it imports state.js, db.js, and scanner.js -->
+  <!-- Loading all four as separate <script type="module"> caused double-instantiation,   -->
+  <!-- breaking the ZXing singleton and the _isProcessing busy-lock in scanner.js.        -->
   <script type="module" src="js/app.js"></script>
 
   <script>

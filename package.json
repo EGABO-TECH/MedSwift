@@ -1,0 +1,13 @@
+{
+  "name": "medswift",
+  "version": "1.0.0",
+  "description": "MedSwift Vision — Enterprise-grade pharmaceutical verification PWA",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  }
+}

@@ -5,7 +5,20 @@
 
 // ─── PROCESSING LOCK & ENGINES ───
 let _isProcessing = false;
-const codeReader = new ZXing.BrowserMultiFormatReader();
+
+// Bug #2 Fix: Lazy-initialize ZXing only when first needed.
+// Instantiating at module-scope caused a ReferenceError because the ZXing CDN
+// script had not finished executing when the ES module was first parsed.
+let _codeReader = null;
+function getCodeReader() {
+  if (!_codeReader) {
+    if (typeof ZXing === 'undefined') {
+      throw new Error('ZXing library not yet loaded. Ensure the CDN script is in <head>.');
+    }
+    _codeReader = new ZXing.BrowserMultiFormatReader();
+  }
+  return _codeReader;
+}
 
 export function isScannerBusy() {
   return _isProcessing;
@@ -17,14 +30,13 @@ export function isScannerBusy() {
  */
 export async function scanBarcode(videoEl) {
   try {
-    // We attempt a single-frame decode to keep the loop performant
-    const result = await codeReader.decodeFromVideoElement(videoEl);
+    const result = await getCodeReader().decodeFromVideoElement(videoEl);
     if (result) {
       console.log('MedVision: Barcode detected:', result.text);
       return result.text;
     }
   } catch (err) {
-    // ZXing throws if no code is found in the frame; we ignore this.
+    // ZXing throws NotFoundException when no code is in the frame — this is expected.
     return null;
   }
   return null;
@@ -35,7 +47,7 @@ export async function scanBarcode(videoEl) {
  */
 export async function scanBarcodeFromImage(imgEl) {
   try {
-    const result = await codeReader.decodeFromImageElement(imgEl);
+    const result = await getCodeReader().decodeFromImageElement(imgEl);
     if (result) {
       console.log('MedVision: Barcode detected in image:', result.text);
       return result.text;
@@ -90,10 +102,16 @@ export async function identifyMedication(base64Image, signal) {
     const cached = await checkLocalVisualCache(imageHash);
     if (cached) {
       console.log('MedVision: Cache hit — returning offline result.');
+      // Bug #4 Fix: Re-derive manualReviewRequired from the cached confidence score.
+      // It was not stored in earlier cache writes, so we recompute it here to ensure
+      // the result card shows the correct clinical badge (e.g. "Manual Review" at 50%).
+      const cs = cached.confidenceScore ?? 0;
       return {
         ...cached,
-        cached: true,
-        verifyMs: Math.round(performance.now() - startTime)
+        authentic:            cs >= 80 && cached.originVerified,
+        manualReviewRequired: cs > 0 && cs < 80,
+        cached:               true,
+        verifyMs:             Math.round(performance.now() - startTime)
       };
     }
 
@@ -146,6 +164,8 @@ export async function identifyMedication(base64Image, signal) {
     };
 
     // 4. Cache High-Confidence Results for Offline Use
+    // Bug #4 Fix: Store the full finalResult (which already contains manualReviewRequired)
+    // so future cache hits can correctly re-derive clinical flags.
     if ((finalResult.confidenceScore ?? 0) >= 90) {
       await cacheVisualSignature(imageHash, finalResult);
     }

@@ -83,22 +83,28 @@ function setupEventListeners() {
     // 1. High-frequency Barcode Scan (Local, Lightweight)
     // 2. Periodic Vision Analysis (Cloud AI)
     scanInterval = setInterval(async () => {
+      // Bug #5 Fix: Re-read status at the top of every tick. After a successful
+      // result, clearInterval is called but one more async tick may already be
+      // in-flight. Both 'verifying' and 'idle' must be treated as stop signals.
       const status = appState.get('scanStatus');
       if (status !== 'scanning') return;
 
       // Part A: Barcode Detection (Every 1s)
-      const barcodeText = await scanBarcode(els.video);
-      if (barcodeText && barcodeText !== lastDetectedBarcode) {
-        lastDetectedBarcode = barcodeText;
-        handleBarcodeDetection(barcodeText);
-      }
+      try {
+        const barcodeText = await scanBarcode(els.video);
+        if (barcodeText && barcodeText !== lastDetectedBarcode) {
+          lastDetectedBarcode = barcodeText;
+          handleBarcodeDetection(barcodeText);
+        }
+      } catch (e) { /* ZXing NotFoundException is expected — not an error */ }
 
-      // Part B: Vision Analysis (Every 4s, if not already processing)
-      if (!isScannerBusy()) {
+      // Part B: Vision Analysis — only if still scanning AND not already busy
+      // Re-read status after the await above; it may have changed.
+      if (appState.get('scanStatus') === 'scanning' && !isScannerBusy()) {
         const frame = await captureFrame(els.video);
         if (frame) await processVisionFrame(frame);
       }
-    }, 1000); 
+    }, 1000);
   });
 
   // ── Upload Image ──

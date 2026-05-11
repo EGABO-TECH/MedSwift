@@ -34,18 +34,28 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Stale-while-revalidate strategy
+  const url = e.request.url;
+
+  // Bug #3 Fix: NEVER cache /api/ calls. The SW was caching the first
+  // /api/identify POST response and returning it for every subsequent scan,
+  // making the app always report the same drug no matter what was scanned.
+  // API calls must ALWAYS go to the network.
+  if (url.includes('/api/') || url.includes('api.fda.gov') || url.includes('api.ocr.space') || url.includes('generativelanguage.googleapis.com') || url.includes('openrouter.ai')) {
+    return; // Let the browser handle it natively — no SW interception.
+  }
+
+  // For all static assets: stale-while-revalidate
   e.respondWith(
     caches.match(e.request).then((cached) => {
       const fetchPromise = fetch(e.request).then((networkResponse) => {
-        // Don't cache API calls in SW (handled by Dexie fdaCache)
-        if (e.request.url.includes('api.fda.gov')) return networkResponse;
-        
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(e.request, networkResponse.clone());
-        });
+        // Only cache successful GET responses for static assets
+        if (networkResponse.ok && e.request.method === 'GET') {
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(e.request, networkResponse.clone());
+          });
+        }
         return networkResponse;
-      }).catch(() => {});
+      }).catch(() => cached); // On network failure, fall back to cache
       return cached || fetchPromise;
     })
   );
@@ -66,7 +76,11 @@ async function syncPendingData() {
 // ─── AUGUST INTELLIGENCE: BACKGROUND AGENT & EMPATHY NUDGES ───
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'TRIGGER_AGENT_CHECK') {
-    event.waitUntil(runAgenticRecallCheck(event.data.history));
+    // Bug #6 Fix: MessageEvent does not have a waitUntil() method — only
+    // InstallEvent, ActivateEvent, and FetchEvent do. Calling event.waitUntil()
+    // here threw a TypeError that silently killed the entire message handler.
+    // The correct pattern is to call the async function directly.
+    runAgenticRecallCheck(event.data.history);
   }
 });
 
