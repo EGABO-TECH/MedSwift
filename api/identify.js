@@ -100,18 +100,22 @@ Return ONLY the raw JSON object.`;
       if (isQuotaError) {
         throw new Error("Intelligence Network Quota Exceeded. Please try again in a minute.");
       }
-      throw new Error(`All intelligence providers failed. Errors: ${errors.join(' | ')}`);
+      // Return the most relevant error for the UI
+      const primaryError = errors[0] || 'Unknown Analysis Failure';
+      throw new Error(`MedVision Core Failure: ${primaryError}. (Check API Key and Region support)`);
     }
 
     visionResult.analysisTimestamp = new Date().toISOString();
     visionResult.ocrEnhanced = extractedText.length > 0;
-    visionResult.authentic = visionResult.confidenceScore >= 80 && visionResult.originVerified;
+    visionResult.authentic = (visionResult.confidenceScore || 0) >= 80 && visionResult.originVerified;
 
     return res.status(200).json(visionResult);
 
   } catch (err) {
     console.error('MedVision System-Wide Failure:', err.message);
-    return res.status(500).json({ error: err.message, details: err.stack });
+    // If the error message is an object (from stringification of Error), we want it clean
+    const cleanMsg = typeof err.message === 'string' ? err.message : JSON.stringify(err.message);
+    return res.status(500).json({ error: cleanMsg });
   }
 }
 
@@ -146,9 +150,25 @@ async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
     clearTimeout(timer);
   }
 
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) {
+    const errText = await response.text();
+    let errJson;
+    try { errJson = JSON.parse(errText); } catch(e) {}
+    
+    // Extract the specific message from Google's error structure
+    const msg = errJson?.error?.message || (typeof errJson?.error === 'string' ? errJson.error : null) || errText;
+    throw new Error(msg || `Google API Error ${response.status}`);
+  }
+
   const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+
+  // Handle case where API succeeds but returns no content (Safety/Policy Block)
+  if (!data.candidates || data.candidates.length === 0) {
+    const reason = data.promptFeedback?.blockReason || 'Content Filtered';
+    throw new Error(`Safety Block: ${reason}`);
+  }
+
+  const text = data.candidates[0].content.parts[0].text || '{}';
   let cleanText = text;
   
   // Robustly extract JSON block even if conversational text is present
