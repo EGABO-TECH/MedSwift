@@ -71,26 +71,42 @@ Return ONLY the raw JSON object.`;
     let visionResult = null;
     let errors = [];
 
-    // TIER 1: Gemini 1.5 Flash (Direct) — fastest, lowest latency
+    // TIER 1: Gemini 1.5 Flash (Multi-Flavor Search)
     if (geminiApiKey) {
-      try {
-        console.log('Tier 1: Attempting Gemini 1.5 Flash...');
-        visionResult = await callGemini('gemini-1.5-flash', prompt, image, mimeType, geminiApiKey);
-      } catch (e) { errors.push(`Flash: ${e.message}`); }
+      const flashModels = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash-001'];
+      for (const m of flashModels) {
+        try {
+          console.log(`Tier 1: Attempting ${m}...`);
+          visionResult = await callGemini(m, prompt, image, mimeType, geminiApiKey);
+          if (visionResult) break;
+        } catch (e) { 
+          errors.push(`Flash(${m}): ${e.message}`);
+          if (e.message.includes('not found')) continue; 
+          break; 
+        }
+      }
     }
 
-    // TIER 2: Gemini 1.5 Pro (Direct) — deeper reasoning fallback
+    // TIER 2: Gemini 1.5 Pro (Multi-Flavor Search)
     if (!visionResult && geminiApiKey) {
-      try {
-        console.log('Tier 2: Falling back to Gemini 1.5 Pro...');
-        visionResult = await callGemini('gemini-1.5-pro', prompt, image, mimeType, geminiApiKey);
-      } catch (e) { errors.push(`Pro: ${e.message}`); }
+      const proModels = ['gemini-1.5-pro', 'gemini-1.5-pro-latest', 'gemini-1.5-pro-001'];
+      for (const m of proModels) {
+        try {
+          console.log(`Tier 2: Attempting ${m}...`);
+          visionResult = await callGemini(m, prompt, image, mimeType, geminiApiKey);
+          if (visionResult) break;
+        } catch (e) {
+          errors.push(`Pro(${m}): ${e.message}`);
+          if (e.message.includes('not found')) continue;
+          break;
+        }
+      }
     }
 
     // TIER 3: OpenRouter (Claude 3.5 Sonnet) - The Ultimate Safety Net
     if (!visionResult && openRouterKey) {
       try {
-        console.log('Tier 3: Activating OpenRouter Nuclear Option (Claude 3.5 Sonnet)...');
+        console.log('Tier 3: Activating OpenRouter Safety Net (Claude 3.5 Sonnet)...');
         visionResult = await callOpenRouter('anthropic/claude-3.5-sonnet', prompt, image, mimeType, openRouterKey);
       } catch (e) { errors.push(`OpenRouter: ${e.message}`); }
     }
