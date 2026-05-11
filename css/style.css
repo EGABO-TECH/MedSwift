@@ -883,7 +883,10 @@ button {
 }
 
 .scanner-video,
-.scanner-upload-preview {
+.scanner-upload-preview,
+.scanner-placeholder {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -892,6 +895,7 @@ button {
 
 .scanner-video {
   opacity: 0;
+  z-index: 2;
 }
 
 .scanner-video.is-active {
@@ -899,17 +903,13 @@ button {
 }
 
 .scanner-upload-preview {
-  position: absolute;
-  inset: 0;
   z-index: 5;
 }
 
 .scanner-placeholder {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
   opacity: 0.3;
   filter: grayscale(50%);
+  z-index: 1;
 }
 
 .scanner-overlay {

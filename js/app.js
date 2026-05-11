@@ -70,6 +70,7 @@ function setupEventListeners() {
 
   // ── Start Live Vision ──
   els.btnStartScan.addEventListener('click', async () => {
+    console.log('MedVision App: Starting scan flow...');
     appState.set('scanStatus', 'scanning');
     showScannerActive();
 
@@ -82,29 +83,35 @@ function setupEventListeners() {
     // MedVision Hybrid Sentinel:
     // 1. High-frequency Barcode Scan (Local, Lightweight)
     // 2. Periodic Vision Analysis (Cloud AI)
-    scanInterval = setInterval(async () => {
-      // Bug #5 Fix: Re-read status at the top of every tick. After a successful
-      // result, clearInterval is called but one more async tick may already be
-      // in-flight. Both 'verifying' and 'idle' must be treated as stop signals.
+    async function scannerTick() {
       const status = appState.get('scanStatus');
-      if (status !== 'scanning') return;
+      if (status !== 'scanning') {
+        scanInterval = null;
+        return;
+      }
 
-      // Part A: Barcode Detection (Every 1s)
+      // Part A: Barcode Detection
       try {
         const barcodeText = await scanBarcode(els.video);
         if (barcodeText && barcodeText !== lastDetectedBarcode) {
           lastDetectedBarcode = barcodeText;
           handleBarcodeDetection(barcodeText);
         }
-      } catch (e) { /* ZXing NotFoundException is expected — not an error */ }
+      } catch (e) { /* ZXing NotFoundException is expected */ }
 
       // Part B: Vision Analysis — only if still scanning AND not already busy
-      // Re-read status after the await above; it may have changed.
       if (appState.get('scanStatus') === 'scanning' && !isScannerBusy()) {
         const frame = await captureFrame(els.video);
         if (frame) await processVisionFrame(frame);
       }
-    }, 1000);
+
+      // Schedule next tick
+      if (appState.get('scanStatus') === 'scanning') {
+        scanInterval = setTimeout(scannerTick, 1000);
+      }
+    }
+
+    scanInterval = setTimeout(scannerTick, 1000);
   });
 
   // ── Upload Image ──
@@ -127,7 +134,7 @@ function setupEventListeners() {
       
       // Part 1: Setup UI for the uploaded asset
       stopCamera(); 
-      if (scanInterval) clearInterval(scanInterval);
+      if (scanInterval) clearTimeout(scanInterval);
       
       els.uploadPreview.src = base64Image;
       els.uploadPreview.classList.remove('hidden');
@@ -240,7 +247,7 @@ async function processVisionFrame(frame) {
     }
 
     // Success — stop the scan loop and display results
-    clearInterval(scanInterval);
+    clearTimeout(scanInterval);
     scanInterval = null;
     stopCamera();
 
@@ -557,7 +564,7 @@ function resetScannerUI() {
   if (inlineErr) inlineErr.remove();
 
   if (scanInterval) {
-    clearInterval(scanInterval);
+    clearTimeout(scanInterval);
     scanInterval = null;
   }
   stopCamera();

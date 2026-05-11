@@ -13,9 +13,11 @@ let _codeReader = null;
 function getCodeReader() {
   if (!_codeReader) {
     if (typeof ZXing === 'undefined') {
-      throw new Error('ZXing library not yet loaded. Ensure the CDN script is in <head>.');
+      console.error('MedVision: ZXing library not found in window scope.');
+      return null;
     }
     _codeReader = new ZXing.BrowserMultiFormatReader();
+    console.log('MedVision: ZXing Reader initialized.');
   }
   return _codeReader;
 }
@@ -29,14 +31,24 @@ export function isScannerBusy() {
  * Scans a video element for 2D GS1 DataMatrix or QR codes.
  */
 export async function scanBarcode(videoEl) {
+  const reader = getCodeReader();
+  if (!reader) return null;
+
   try {
-    const result = await getCodeReader().decodeFromVideoElement(videoEl);
+    // We use a shorter timeout or just check once if possible
+    // Note: decodeOnceFromVideoElement will wait until it finds a barcode.
+    // This can block the vision loop. We wrap it in a timeout or race.
+    const result = await Promise.race([
+      reader.decodeOnceFromVideoElement(videoEl),
+      new Promise((_, reject) => setTimeout(() => reject('timeout'), 800))
+    ]);
+
     if (result) {
       console.log('MedVision: Barcode detected:', result.text);
       return result.text;
     }
   } catch (err) {
-    // ZXing throws NotFoundException when no code is in the frame — this is expected.
+    // 'timeout' or NotFound is expected
     return null;
   }
   return null;
@@ -60,19 +72,49 @@ export async function scanBarcodeFromImage(imgEl) {
 
 // ─── CAMERA ───
 export async function startCamera(videoEl) {
+  console.log('MedVision: Starting camera...');
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
+    const constraints = {
       video: {
-        facingMode: { ideal: 'environment' }, // Prefer rear camera
+        facingMode: { ideal: 'environment' },
         width: { ideal: 1280 },
         height: { ideal: 720 }
       }
-    });
+    };
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    console.log('MedVision: getUserMedia success.');
     videoEl.srcObject = stream;
-    await videoEl.play();
-    return stream;
+    videoEl.style.opacity = '1';
+    videoEl.classList.add('is-active');
+    
+    if (videoEl.readyState >= 2) {
+      await videoEl.play();
+      console.log('MedVision: Video playing (immediate).');
+      return stream;
+    }
+
+    return new Promise((resolve) => {
+      videoEl.onloadedmetadata = () => {
+        videoEl.play()
+          .then(() => {
+            console.log('MedVision: Video playing (event).');
+            resolve(stream);
+          })
+          .catch(e => {
+            console.warn('MedVision: Play interrupted:', e.message);
+            resolve(stream);
+          });
+      };
+      
+      // Safety timeout
+      setTimeout(() => {
+        console.log('MedVision: Camera start timeout reached.');
+        resolve(stream);
+      }, 3000);
+    });
   } catch (err) {
-    console.error('Camera Access Error:', err.name, err.message);
+    console.error('MedVision: Camera Access Error:', err.name, err.message);
     return null;
   }
 }
