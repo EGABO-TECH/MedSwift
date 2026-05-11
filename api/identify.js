@@ -71,25 +71,36 @@ Return ONLY the raw JSON object.`;
     let visionResult = null;
     let errors = [];
 
-    // TIER 1: Gemini 1.5 Flash (Multi-Flavor Search)
+    // TIER 1: Gemini 2.0 Flash — Current stable primary (fast, multimodal)
+    // NOTE: v1beta endpoint is used because it supports ALL Gemini models,
+    // both stable and preview. The v1 stable endpoint only supports a restricted
+    // subset of GA models and was returning 'not found' for all gemini-1.5-* names.
     if (geminiApiKey) {
-      const flashModels = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash-001'];
+      const flashModels = [
+        'gemini-2.0-flash',           // Current primary — fast & multimodal
+        'gemini-2.0-flash-lite',      // Lightweight fallback
+        'gemini-1.5-flash',           // Legacy fallback (may still be active)
+      ];
       for (const m of flashModels) {
         try {
           console.log(`Tier 1: Attempting ${m}...`);
           visionResult = await callGemini(m, prompt, image, mimeType, geminiApiKey);
           if (visionResult) break;
-        } catch (e) { 
+        } catch (e) {
           errors.push(`Flash(${m}): ${e.message}`);
-          if (e.message.includes('not found')) continue; 
-          break; 
+          if (e.message.includes('not found') || e.message.includes('NOT_FOUND') || e.message.includes('not supported')) continue;
+          break;
         }
       }
     }
 
-    // TIER 2: Gemini 1.5 Pro (Multi-Flavor Search)
+    // TIER 2: Gemini 2.5 Flash / 1.5 Pro — Elite reasoning fallback
     if (!visionResult && geminiApiKey) {
-      const proModels = ['gemini-1.5-pro', 'gemini-1.5-pro-latest', 'gemini-1.5-pro-001'];
+      const proModels = [
+        'gemini-2.5-flash-preview-04-17', // Latest high-reasoning model
+        'gemini-1.5-pro',                 // Legacy pro fallback
+        'gemini-1.5-pro-latest',          // Last-resort alias
+      ];
       for (const m of proModels) {
         try {
           console.log(`Tier 2: Attempting ${m}...`);
@@ -97,7 +108,7 @@ Return ONLY the raw JSON object.`;
           if (visionResult) break;
         } catch (e) {
           errors.push(`Pro(${m}): ${e.message}`);
-          if (e.message.includes('not found')) continue;
+          if (e.message.includes('not found') || e.message.includes('NOT_FOUND') || e.message.includes('not supported')) continue;
           break;
         }
       }
@@ -145,15 +156,18 @@ Return ONLY the raw JSON object.`;
  * Native Google Gemini Call
  */
 async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
-  // 8-second timeout prevents Vercel's 10s limit from being breached
+  // 20-second timeout — generous enough for 2.5 Pro but safe under our 25s maxDuration
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
+  const timer = setTimeout(() => ctrl.abort(), 20000);
 
   let response;
   try {
-    // Switching to v1 stable endpoint
+    // CRITICAL FIX: Use v1beta endpoint — it supports ALL Gemini models
+    // (both stable and preview). The v1 stable endpoint only supports a restricted
+    // set of GA models and returned 'not found' for all gemini-1.5-* and gemini-2.0-*
+    // model names, causing every scan to fail silently through all 6 model tiers.
     response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -165,7 +179,10 @@ async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
               { inline_data: { mime_type: mimeType, data: imageData } }
             ]
           }],
-          generationConfig: { temperature: 0.1 } // v1 might not support responseMimeType in all tiers
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: 'application/json' // Request JSON directly to skip regex parsing
+          }
         })
       }
     );
