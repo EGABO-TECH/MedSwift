@@ -50,194 +50,74 @@ const els = {
 document.addEventListener('DOMContentLoaded', async () => {
   await seedDemoData();
   setupEventListeners();
+  // Ensure mode is initialized
   setAnalysisMode(appState.get('analysisMode') || 'medication');
-
-  // ─── AUGUST INTELLIGENCE INITIALIZATION ───
-  // Request Notification permission for Empathetic Nudges & Alerts
-  if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-    // We delay the request slightly so it doesn't block the initial render
-    setTimeout(() => {
-      Notification.requestPermission();
-    }, 3000);
-  }
-  
-  // Trigger Background Agent Check
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.ready.then(registration => {
-      if (registration.active) {
-        // Send the offline history to the background agent for cross-referencing
-        const history = appState.get('scanHistory') || [];
-        registration.active.postMessage({ type: 'TRIGGER_AGENT_CHECK', history });
-      }
-    });
-  }
 });
 
 // ─── EVENT LISTENERS ───
 function setupEventListeners() {
-
-  els.modeMedication.addEventListener('click', () => {
-    setAnalysisMode('medication');
-  });
-
-  els.modeReport.addEventListener('click', () => {
-    setAnalysisMode('report');
-  });
-
-  els.btnAnalyzeText.addEventListener('click', async () => {
-    const text = (els.reportTextInput.value || '').trim();
-    if (!text) {
-      showInlineError('Please paste a medical report before summarizing.');
+  function addListenerSafe(el, ev, fn) {
+    if (!el) {
+      console.warn('Missing element for event listener:', ev, el);
       return;
     }
+    el.addEventListener(ev, fn);
+  }
 
+  addListenerSafe(els.modeMedication, 'click', () => setAnalysisMode('medication'));
+  addListenerSafe(els.modeReport, 'click', () => setAnalysisMode('report'));
+
+  addListenerSafe(els.btnAnalyzeText, 'click', async () => {
+    const text = (els.reportTextInput?.value || '').trim();
+    if (!text) { showInlineError('Please paste a medical report before summarizing.'); return; }
     appState.set('scanStatus', 'verifying');
     showScannerActive();
-    els.reportTextInput.disabled = true;
-    els.btnAnalyzeText.disabled = true;
-    els.btnAnalyzeText.innerHTML = '<span class="btn-spinner" style="width:14px;height:14px;border-width:2px;"></span> Summarizing...';
-
+    if (els.reportTextInput) els.reportTextInput.disabled = true;
+    if (els.btnAnalyzeText) { els.btnAnalyzeText.disabled = true; els.btnAnalyzeText.innerHTML = '<span class="btn-spinner" style="width:14px;height:14px;border-width:2px;"></span> Summarizing...'; }
     try {
       const result = await analyzeReportText(text);
-      if (result?.error) {
-        showInlineError(result.error);
-        appState.set('scanStatus', 'idle');
-        resetScannerUI();
-        return;
-      }
+      if (result?.error) { showInlineError(result.error); appState.set('scanStatus', 'idle'); resetScannerUI(); return; }
       showResultCard(result, 'report');
       addToAuditTrail(result);
-    } catch (err) {
-      console.error(err);
-      showInlineError('Report summarization failed. Please try again.');
-    } finally {
-      els.reportTextInput.disabled = false;
-      els.btnAnalyzeText.disabled = false;
-      els.btnAnalyzeText.innerHTML = 'Summarize Report';
-    }
+    } catch (err) { console.error(err); showInlineError('Report summarization failed. Please try again.'); }
+    finally { if (els.reportTextInput) els.reportTextInput.disabled = false; if (els.btnAnalyzeText) { els.btnAnalyzeText.disabled = false; els.btnAnalyzeText.innerHTML = 'Summarize Report'; } }
   });
 
-  // ── Start Live Vision ──
-  els.btnStartScan.addEventListener('click', async () => {
-    console.log('MedVision App: Starting scan flow...');
+  addListenerSafe(els.btnStartScan, 'click', async () => {
     appState.set('scanStatus', 'scanning');
     showScannerActive();
-
     activeStream = await startCamera(els.video);
-    if (!activeStream) {
-      showCameraError();
-      return;
-    }
+    if (!activeStream) { showCameraError(); return; }
 
-    // MedVision Hybrid Sentinel:
-    // 1. High-frequency Barcode Scan (Local, Lightweight)
-    // 2. Periodic Vision Analysis (Cloud AI)
     async function scannerTick() {
-      const status = appState.get('scanStatus');
-      if (status !== 'scanning') {
-        scanInterval = null;
-        return;
-      }
-
-      // Part A: Barcode Detection (Medication mode only)
+      const status = appState.get('scanStatus'); if (status !== 'scanning') { scanInterval = null; return; }
       if (appState.get('analysisMode') === 'medication') {
-        try {
-          const barcodeText = await scanBarcode(els.video);
-          if (barcodeText && barcodeText !== lastDetectedBarcode) {
-            lastDetectedBarcode = barcodeText;
-            handleBarcodeDetection(barcodeText);
-          }
-        } catch (e) { /* ZXing NotFoundException is expected */ }
+        try { const barcodeText = await scanBarcode(els.video); if (barcodeText && barcodeText !== lastDetectedBarcode) { lastDetectedBarcode = barcodeText; handleBarcodeDetection(barcodeText); } } catch (e) {}
       }
-
-      // Part B: Vision Analysis — only if still scanning AND not already busy
-      if (appState.get('scanStatus') === 'scanning' && !isScannerBusy()) {
-        const frame = await captureFrame(els.video);
-        if (frame) await processVisionFrame(frame);
-      }
-
-      // Schedule next tick
-      if (appState.get('scanStatus') === 'scanning') {
-        scanInterval = setTimeout(scannerTick, 1000);
-      }
+      if (appState.get('scanStatus') === 'scanning' && !isScannerBusy()) { const frame = await captureFrame(els.video); if (frame) await processVisionFrame(frame); }
+      if (appState.get('scanStatus') === 'scanning') scanInterval = setTimeout(scannerTick, 1000);
     }
-
     scanInterval = setTimeout(scannerTick, 1000);
   });
 
-  // ── Upload Image ──
-  els.btnUploadScan.addEventListener('click', () => els.uploadInput.click());
+  addListenerSafe(els.btnUploadScan, 'click', () => { if (els.uploadInput) els.uploadInput.click(); });
 
-  els.uploadInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
+  addListenerSafe(els.uploadInput, 'change', async (e) => {
+    const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
     reader.onload = async (event) => {
-      let base64Image = event.target.result;
-      
-      // Optimize image for AI (Resize to max 1280px while keeping aspect ratio)
-      try {
-        base64Image = await resizeImage(base64Image, 1280);
-      } catch (e) {
-        console.warn('Image optimization skipped:', e);
-      }
-      
-      // Part 1: Setup UI for the uploaded asset
-      stopCamera(); 
-      if (scanInterval) clearTimeout(scanInterval);
-      
-      els.uploadPreview.src = base64Image;
-      els.uploadPreview.classList.remove('hidden');
-      els.placeholder.classList.add('hidden');
-      els.video.classList.remove('is-active');
-      
-      showScannerActive(); // Shows beam, hides controls
-
-      // Part 2: Trigger the Sentinel Analysis
-      if (appState.get('analysisMode') === 'medication') {
-        const barcodeText = await scanBarcodeFromImage(els.uploadPreview);
-        if (barcodeText) {
-          handleBarcodeDetection(barcodeText);
-        }
-      }
-
-      // Run Vision analysis
-      await processVisionFrame(base64Image);
-      
-      els.uploadInput.value = ''; 
+      let base64Image = event.target.result; try { base64Image = await resizeImage(base64Image, 1280); } catch (e) { console.warn('Image optimization skipped:', e); }
+      stopCamera(); if (scanInterval) clearTimeout(scanInterval);
+      if (els.uploadPreview) { els.uploadPreview.src = base64Image; els.uploadPreview.classList.remove('hidden'); }
+      if (els.placeholder) els.placeholder.classList.add('hidden'); if (els.video) els.video.classList.remove('is-active');
+      showScannerActive(); if (appState.get('analysisMode') === 'medication') { const barcodeText = await scanBarcodeFromImage(els.uploadPreview); if (barcodeText) handleBarcodeDetection(barcodeText); }
+      await processVisionFrame(base64Image); if (els.uploadInput) els.uploadInput.value = '';
     };
     reader.readAsDataURL(file);
   });
 
-  // ── Cancel Analysis ──
-  els.btnCancelAnalysis.addEventListener('click', () => {
-    if (analysisController) {
-      analysisController.abort();
-      analysisController = null;
-    }
-    resetScannerUI();
-  });
-
-  // ── Dismiss Result Card ──
-  els.dismissScan.addEventListener('click', resetScannerUI);
-
-  // ── PDF Download ──
-  if (els.btnDownloadPdf) {
-    els.btnDownloadPdf.addEventListener('click', async () => {
-      const result = appState.get('lastResult');
-      if (!result) return;
-      
-      const originalHTML = els.btnDownloadPdf.innerHTML;
-      els.btnDownloadPdf.innerHTML = '<span class="btn-spinner" style="width:14px;height:14px;border-width:2px;"></span> GENERATING...';
-      els.btnDownloadPdf.disabled = true;
-
-      await generatePDFReport(result);
-
-      els.btnDownloadPdf.innerHTML = originalHTML;
-      els.btnDownloadPdf.disabled = false;
-    });
-  }
+  addListenerSafe(els.btnCancelAnalysis, 'click', () => { if (analysisController) { analysisController.abort(); analysisController = null; } resetScannerUI(); });
+  addListenerSafe(els.dismissScan, 'click', resetScannerUI);
+  if (els.btnDownloadPdf) els.btnDownloadPdf.addEventListener('click', async () => { const result = appState.get('lastResult'); if (!result) return; const originalHTML = els.btnDownloadPdf.innerHTML; els.btnDownloadPdf.innerHTML = '<span class="btn-spinner" style="width:14px;height:14px;border-width:2px;"></span> GENERATING...'; els.btnDownloadPdf.disabled = true; await generatePDFReport(result); els.btnDownloadPdf.innerHTML = originalHTML; els.btnDownloadPdf.disabled = false; });
 }
 
 // ─── SCANNER UI STATE ───
@@ -878,6 +758,8 @@ function renderAuditTrail() {
     const bg     = ok ? 'rgba(34,197,94,0.1)' : (manual ? 'rgba(234,179,8,0.1)' : 'rgba(239,68,68,0.1)');
     const icon   = ok ? 'check' : (manual ? 'alert-circle' : 'x');
     const name   = scan.drugName || scan.title || 'Unknown Report';
+    return `
+      <div class="audit-item">
         <div class="audit-item-icon" style="background: ${bg};">
           <i data-lucide="${icon}" style="width: 14px; height: 14px; color: ${color};"></i>
         </div>
@@ -889,7 +771,6 @@ function renderAuditTrail() {
           <div class="audit-item-meta">
             ${escapeHtml(scan.manufacturer || 'Unknown')}
             ${scan.verifyMs ? ` • ${scan.verifyMs}ms` : ''}
-            ${time ? ` • ${time}` : ''}
             ${scan.cached ? ' • <span style="color: var(--purple-glow);">Cached</span>' : ''}
           </div>
         </div>
