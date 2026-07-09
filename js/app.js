@@ -323,54 +323,86 @@ async function handleMultiFileInteractionCheck() {
   els.intelligenceIcon.classList.add('status-pulse');
   els.cancelAnalysisBox.classList.remove('hidden');
 
+  // Show processing status
+  const verificationZone = document.getElementById('verification-zone');
+  let statusUpdateInterval = null;
+
   try {
     // Process all files to extract medication information
-    const medicationPromises = files.map(async (file, index) => {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          let base64Image = event.target.result;
-          try {
-            // Process image for medication identification
-            base64Image = await resizeImage(base64Image, 1280);
+    const medicationResults = [];
 
-            // Use existing identifyMedication function to get drug info
-            // Note: We're using a temporary AbortController since we don't need to cancel this
-            const controller = new AbortController();
-            const result = await identifyMedication(
-              base64Image,
-              controller.signal,
-              appState.get('analysisMode')
-            );
+    // Update UI to show processing started
+    if (verificationZone) {
+      verificationZone.innerHTML = `
+        <div style="text-align: center; padding: 20px; color: var(--teal-primary);">
+          <i data-lucide="loader" style="width:24px;height:24px;margin-bottom:12px;"></i>
+          <p>Processing ${files.length} images...</p>
+          <p id="process-status">0/${files.length} completed</p>
+        </div>
+      `;
+      lucide.createIcons();
+    }
 
-            resolve({
-              index,
-              name: file.name,
-              result: result.error ? null : result,
-              error: result.error
-            });
-          } catch (err) {
-            resolve({
-              index,
-              name: file.name,
-              result: null,
-              error: err.message || 'Processing failed'
-            });
-          }
-        };
-        reader.onerror = () => {
-          resolve({
-            index,
-            name: file.name,
-            result: null,
-            error: 'Failed to read file'
-          });
-        };
-        reader.readAsDataURL(file);
-      });
-    });
+    // Process files sequentially to avoid conflicts with the _isProcessing lock in identifyMedication
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        // Update status
+        if (document.getElementById('process-status')) {
+          document.getElementById('process-status').textContent = `${i}/${files.length} completed`;
+        }
 
-    const medicationResults = await Promise.all(medicationPromises);
+        const base64Image = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            let base64Image = event.target.result;
+            try {
+              // Process image for medication identification
+              base64Image = resizeImage(base64Image, 1280);
+            } catch (e) {
+              console.warn('Image optimization skipped:', e);
+            }
+            resolve(base64Image);
+          };
+          reader.onerror = (e) => reject(e);
+          reader.readAsDataURL(file);
+        });
+
+        // Use existing identifyMedication function to get drug info
+        const controller = new AbortController();
+        const result = await identifyMedication(
+          base64Image,
+          controller.signal,
+          appState.get('analysisMode')
+        );
+
+        medicationResults.push({
+          index: i,
+          name: file.name,
+          result: result.error ? null : result,
+          error: result.error
+        });
+
+        // Small delay to prevent overwhelming the system
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (err) {
+        medicationResults.push({
+          index: i,
+          name: file.name,
+          result: null,
+          error: err.message || 'Processing failed'
+        });
+        console.error(`Error processing file ${file.name}:`, err);
+      }
+    }
+
+    // Final status update
+    if (document.getElementById('process-status')) {
+      document.getElementById('process-status').textContent = `${files.length}/${files.length} completed`;
+    }
+
+    // Brief pause to show completion
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     // Filter out failed processes
     const validResults = medicationResults
@@ -378,7 +410,7 @@ async function handleMultiFileInteractionCheck() {
       .map(r => r.result);
 
     if (validResults.length < 2) {
-      throw new Error('Need at least 2 successfully processed medications to check interactions');
+      throw new Error(`Need at least 2 successfully processed medications to check interactions. Successfully processed: ${validResults.length}/${files.length}`);
     }
 
     // Prepare data for interaction analysis
@@ -388,6 +420,17 @@ async function handleMultiFileInteractionCheck() {
       manufacturer: result.manufacturer || '',
       indication: result.indication || ''
     }));
+
+    // Update UI for analysis phase
+    if (verificationZone) {
+      verificationZone.innerHTML = `
+        <div style="text-align: center; padding: 20px; color: var(--teal-primary);">
+          <i data-lucide="loader" style="width:24px;height:24px;margin-bottom:12px;"></i>
+          <p>Analyzing drug interactions...</p>
+        </div>
+      `;
+      lucide.createIcons();
+    }
 
     // Call API for interaction analysis
     const interactionResult = await analyzeDrugInteractions(medications);
@@ -404,6 +447,11 @@ async function handleMultiFileInteractionCheck() {
     console.error('Multi-file interaction check error:', err);
     showInlineError(err.message || 'Interaction analysis failed');
   } finally {
+    // Clear status update interval if it exists
+    if (statusUpdateInterval) {
+      clearInterval(statusUpdateInterval);
+    }
+
     // Reset UI scanning state
     els.beam.classList.remove('intelligence-glow');
     els.shimmer.classList.add('hidden');
@@ -412,6 +460,35 @@ async function handleMultiFileInteractionCheck() {
     appState.set('scanStatus', 'scanning');
     // Clear pending files
     appState.set('pendingUploadFiles', null);
+
+    // Reset verification zone to show ready state for multiple files if any remain
+    const remainingFiles = appState.get('pendingUploadFiles');
+    if (remainingFiles && remainingFiles.length > 1) {
+      setTimeout(() => {
+        if (verificationZone) {
+          verificationZone.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: var(--teal-primary);">
+              <i data-lucide="check-circle" style="width:32px;height:32px;margin-bottom:12px;"></i>
+              <p>${remainingFiles.length} files selected for analysis</p>
+              <button id="btn-check-interactions" style="background: var(--teal-primary); color: white; border: none; padding: 8px 16px; border-radius: 4px; font-weight: 500; cursor: pointer;">
+                Check Drug Interactions
+              </button>
+            </div>
+          `;
+          lucide.createIcons();
+
+          // Re-add listener for the interaction check button
+          setTimeout(() => {
+            const btnCheckInteractions = document.getElementById('btn-check-interactions');
+            if (btnCheckInteractions) {
+              btnCheckInteractions.addEventListener('click', async () => {
+                await handleMultiFileInteractionCheck();
+              });
+            }
+          }, 100);
+        }
+      }, 100);
+    }
   }
 }
 
