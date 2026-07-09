@@ -3,7 +3,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { image, mimeType = 'image/jpeg', mode = 'medication', text = '' } = req.body;
+  const { image, mimeType = 'image/jpeg', mode = 'medication', text = '', medications = [] } = req.body;
   const geminiApiKey = process.env.GEMINI_API_KEY;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
 
@@ -59,8 +59,9 @@ export default async function handler(req, res) {
     }
 
     // ─── STAGE 2: MULTI-PROVIDER RESILIENCE PIPELINE ───
-    const prompt = mode === 'report'
-      ? `You are a clinical documentation assistant. Analyze the image of a written medical report and rewrite it into a concise, understandable medical report.
+    let prompt = '';
+    if (mode === 'report') {
+      prompt = `You are a clinical documentation assistant. Analyze the image of a written medical report and rewrite it into a concise, understandable medical report.
 Label context: "${extractedText}"
 Your task is to summarize the report clearly for a pharmacist or clinician. Return a JSON object with:
 - title (short, professional title)
@@ -70,8 +71,34 @@ Your task is to summarize the report clearly for a pharmacist or clinician. Retu
 - followUp (one short sentence for follow-up or next steps)
 - confidenceScore (0-100)
 - sourceContext (brief note on the document type or context)
-Return ONLY the raw JSON object.`
-      : `You are a Senior Clinical Pharmacist and Regulatory Auditor. Identify this medication based on the image and text.
+Return ONLY the raw JSON object.`;
+    } else if (mode === 'interaction') {
+      const medsList = medications.map((med, idx) =>
+        `${idx + 1}. ${med.drugName || 'Unknown'} (${med.genericName || ''}) - ${med.indication || 'No indication provided'}`)
+        .join('\n');
+      prompt = `You are a Clinical Pharmacist specializing in drug interactions and polypharmacy safety. Analyze the following medications for potential interactions and provide guidance on their combined use.
+
+Medications to analyze:
+${medsList}
+
+Provide a comprehensive interaction analysis in JSON format with:
+- interactionRiskLevel: "LOW" | "MODERATE" | "HIGH" | "CONTRAINDICATED"
+- interactingPairs: Array of objects with drug1, drug2, severity, description, clinicalSignificance
+- therapeuticCompatibility: Assessment of whether these medications can be used together safely
+- dosingConsiderations: Any special dosing adjustments needed when used together
+- monitoringRecommendations: What parameters to monitor and how frequently
+- alternativeRecommendations: Safer alternatives if interactions are significant
+- patientCounseling: Key points to communicate to the patient about taking these medications together
+- overallAssessment: Summary statement about the safety and appropriateness of this combination
+- confidenceScore: (0-100) confidence in this interaction assessment
+- evidenceLevel: "High" | "Moderate" | "Low" based on available interaction data
+- primaryConcern: The most significant interaction concern, if any
+- recommendedAction: "PROCEED_WITH_CAUTION", "DO_NOT_COMBINE", "CONSULT_SPECIALIST", etc.
+
+Return ONLY the raw JSON object.`;
+    } else {
+      // Default medication mode
+      prompt = `You are a Senior Clinical Pharmacist and Regulatory Auditor. Identify this medication based on the image and text.
 Label context: "${extractedText}"
 Cross-reference your internal knowledge with the following Gold Standard Datasets:
 1. OpenFDA & EMA for manufacturer, regulatory status, and origin.
@@ -99,6 +126,7 @@ Return a JSON report with:
 - proactiveInsight (A proactive contextual highlight or safety insight)
 
 Return ONLY the raw JSON object.`;
+    }
 
     // Configure available AI providers in order of preference
     const providers = [];
