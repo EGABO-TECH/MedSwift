@@ -283,6 +283,9 @@ Return ONLY the raw JSON object.`;
     const cleanMsg = typeof err.message === 'string' ? err.message : JSON.stringify(err.message);
     return res.status(500).json({ error: cleanMsg });
   }
+
+  // Return successful response
+  return res.status(200).json(visionResult);
 }
 
 /**
