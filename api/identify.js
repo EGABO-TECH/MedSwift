@@ -8,7 +8,24 @@ export default async function handler(req, res) {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
 
   if (!geminiApiKey && !openRouterKey) {
-    return res.status(500).json({ error: 'No Intelligence Providers Configured (Gemini or OpenRouter)' });
+    // Check if any OpenAI-compatible providers are configured
+    const openaiCompatibleProviders = [
+      { name: 'NVIDIA NIM', envVar: 'NVIDIA_NIM_API_KEY' },
+      { name: 'DeepSeek', envVar: 'DEEPSEEK_API_KEY' },
+      { name: 'Groq', envVar: 'GROQ_API_KEY' },
+      { name: 'SambaNova', envVar: 'SAMBANOVA_API_KEY' },
+      { name: 'Fireworks AI', envVar: 'FIREWORKS_API_KEY' },
+      { name: 'Cohere', envVar: 'COHERE_API_KEY' },
+      { name: 'Kimi (Moonshot)', envVar: 'KIMI_API_KEY' },
+      { name: 'Minimax', envVar: 'MINIMAX_API_KEY' },
+      { name: 'Z.AI', envVar: 'ZAI_API_KEY' }
+    ];
+
+    const hasOpenAIProvider = openaiCompatibleProviders.some(p => process.env[p.envVar]);
+
+    if (!hasOpenAIProvider) {
+      return res.status(500).json({ error: 'No Intelligence Providers Configured' });
+    }
   }
 
   try {
@@ -40,7 +57,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // ─── STAGE 2: TRIPLE-TIER RESILIENCE PIPELINE ───
+    // ─── STAGE 2: MULTI-PROVIDER RESILIENCE PIPELINE ───
     const prompt = mode === 'report'
       ? `You are a clinical documentation assistant. Analyze the image of a written medical report and rewrite it into a concise, understandable medical report.
 Label context: "${extractedText}"
@@ -58,10 +75,10 @@ Label context: "${extractedText}"
 Cross-reference your internal knowledge with the following Gold Standard Datasets:
 1. OpenFDA & EMA for manufacturer, regulatory status, and origin.
 2. Health Canada DPD for therapeutic class.
-3. DrugBank & ChEMBL for biochemical pathway.
+3. DrugBank & CH EMBL for biochemical pathway.
 4. WHO EML to check if it's a core essential medicine.
 
-Return a JSON report with: 
+Return a JSON report with:
 - drugName (Brand name)
 - genericName
 - manufacturer
@@ -82,85 +99,178 @@ Return a JSON report with:
 
 Return ONLY the raw JSON object.`;
 
+    // Configure available AI providers in order of preference
+    const providers = [];
+
+    // Add Gemini/Google AI Studio if key is available
+    if (process.env.GEMINI_API_KEY) {
+      providers.push({
+        name: 'Google AI Studio (Gemini)',
+        key: process.env.GEMINI_API_KEY,
+        type: 'gemini',
+        models: {
+          flash: [
+            'gemini-2.0-flash',
+            'gemini-2.0-flash-lite',
+            'gemini-1.5-flash'
+          ],
+          pro: [
+            'gemini-2.5-flash-preview-04-17', // Latest high-reasoning model
+            'gemini-1.5-pro',                 // Legacy pro fallback
+            'gemini-1.5-pro-latest'           // Last-resort alias
+          ]
+        }
+      });
+    }
+
+    // Add OpenRouter if key is available
+    if (process.env.OPENROUTER_API_KEY) {
+      providers.push({
+        name: 'OpenRouter',
+        key: process.env.OPENROUTER_API_KEY,
+        type: 'openrouter',
+        models: [
+          'google/gemini-2.0-flash-001',
+          'anthropic/claude-3.5-sonnet',
+          'openai/gpt-4o-mini',
+          'meta-llama/llama-3-70b-instruct',
+          'mistralai/mistral-large-latest',
+          'nvidia/nemotron-4-340b-instruct',
+          'deepseek/deepseek-chat-v3-0324',
+          'cohere/command-r-plus',
+          'moonshotai/kimi-k2-0905-preview',
+          'minimax/minimax-m1-80k',
+          'groq/llama-3.1-70b-versatile',
+          'sambanova/Models-Llama-3.1-70B-Instruct',
+          'fireworks/llama-v3p1-70b-instruct',
+          '01-ai/yi-large'
+        ]
+      });
+    }
+
+    // Add Direct OpenAI-compatible providers
+    const openaiCompatibleProviderDefs = [
+      { name: 'NVIDIA NIM', envVar: 'NVIDIA_NIM_API_KEY', baseUrl: 'https://ai.api.nvidia.com/v1', models: ['nemotron-4-340b-instruct'] },
+      { name: 'DeepSeek', envVar: 'DEEPSEEK_API_KEY', baseUrl: 'https://api.deepseek.com/v1', models: ['deepseek-chat'] },
+      { name: 'Groq', envVar: 'GROQ_API_KEY', baseUrl: 'https://api.groq.com/openai/v1', models: ['llama3-70b-8192', 'mixtral-8x7b-32768'] },
+      { name: 'SambaNova', envVar: 'SAMBANOVA_API_KEY', baseUrl: 'https://api.sambanova.ai/v1', models: ['Meta-Llama-3.1-70B-Instruct'] },
+      { name: 'Fireworks AI', envVar: 'FIREWORKS_API_KEY', baseUrl: 'https://api.fireworks.ai/inference/v1', models: ['accounts/fireworks/models/llama-v3p1-70b-instruct'] },
+      { name: 'Cohere', envVar: 'COHERE_API_KEY', baseUrl: 'https://api.cohere.ai/v1', models: ['command-r-plus'], special: true },
+      { name: 'Kimi (Moonshot)', envVar: 'KIMI_API_KEY', baseUrl: 'https://api.moonshot.cn/v1', models: ['kimi-k2-0905-preview'] },
+      { name: 'Minimax', envVar: 'MINIMAX_API_KEY', baseUrl: 'https://api.minimaxi.com/v1', models: ['abab6.5s-chat'] },
+      { name: 'Z.AI', envVar: 'ZAI_API_KEY', baseUrl: 'https://api.z.ai/v1', models: ['z-ai-plus'] }
+    ];
+
+    for (const providerDef of openaiCompatibleProviderDefs) {
+      if (process.env[providerDef.envVar]) {
+        providers.push({
+          name: providerDef.name,
+          key: process.env[providerDef.envVar],
+          type: 'openai-compatible',
+          baseUrl: providerDef.baseUrl,
+          models: providerDef.models,
+          special: providerDef.special
+        });
+      }
+    }
+
+    if (providers.length === 0) {
+      return res.status(500).json({ error: 'No Intelligence Providers Configured' });
+    }
+
     let visionResult = null;
-    let errors = [];
+    const errors = [];
 
-    // TIER 1: Gemini 2.0 Flash — Current stable primary (fast, multimodal)
-    // NOTE: v1beta endpoint is used because it supports ALL Gemini models,
-    // both stable and preview. The v1 stable endpoint only supports a restricted
-    // subset of GA models and was returning 'not found' for all gemini-1.5-* names.
-    if (geminiApiKey) {
-      const flashModels = [
-        'gemini-2.0-flash',           // Current primary — fast & multimodal
-        'gemini-2.0-flash-lite',      // Lightweight fallback
-        'gemini-1.5-flash',           // Legacy fallback (may still be active)
-      ];
-      for (const m of flashModels) {
-        try {
-          console.log(`Tier 1: Attempting ${m}...`);
-          visionResult = await callGemini(m, prompt, image, mimeType, geminiApiKey);
-          if (visionResult) break;
-        } catch (e) {
-          errors.push(`Flash(${m}): ${e.message}`);
-          if (e.message.includes('not found') || e.message.includes('NOT_FOUND') || e.message.includes('not supported')) continue;
-          break;
-        }
-      }
-    }
+    // Try each provider in order until one succeeds
+    for (const provider of providers) {
+      if (visionResult) break; // Success, exit early
 
-    // TIER 2: Gemini 2.5 Flash / 1.5 Pro — Elite reasoning fallback
-    if (!visionResult && geminiApiKey) {
-      const proModels = [
-        'gemini-2.5-flash-preview-04-17', // Latest high-reasoning model
-        'gemini-1.5-pro',                 // Legacy pro fallback
-        'gemini-1.5-pro-latest',          // Last-resort alias
-      ];
-      for (const m of proModels) {
-        try {
-          console.log(`Tier 2: Attempting ${m}...`);
-          visionResult = await callGemini(m, prompt, image, mimeType, geminiApiKey);
-          if (visionResult) break;
-        } catch (e) {
-          errors.push(`Pro(${m}): ${e.message}`);
-          if (e.message.includes('not found') || e.message.includes('NOT_FOUND') || e.message.includes('not supported')) continue;
-          break;
-        }
-      }
-    }
-
-    // TIER 3: OpenRouter (Claude/Gemini) - The Ultimate Safety Net
-    if (!visionResult && openRouterKey) {
       try {
-        console.log('Tier 3: Activating OpenRouter Safety Net...');
-        // Using gemini-2.0-flash-001 via OpenRouter as it is verified working for this key
-        visionResult = await callOpenRouter('google/gemini-2.0-flash-001', prompt, image, mimeType, openRouterKey);
-      } catch (e) { 
-        errors.push(`OpenRouter: ${e.message}`); 
-      }
-    }
+        console.log(`Trying ${provider.name}...`);
 
-    if (!visionResult) {
-      const isQuotaError = errors.some(e => e.includes('QuotaFailure') || e.includes('429'));
-      if (isQuotaError) {
-        throw new Error("Intelligence Network Quota Exceeded. Please try again in a minute.");
-      }
-      // Return the most relevant error for the UI
-      const primaryError = errors[0] || 'Unknown Analysis Failure';
-      throw new Error(`MedVision Core Failure: ${primaryError}. (Check API Key and Region support)`);
-    }
+        switch (provider.type) {
+          case 'gemini':
+            // Try flash models first (fast), then pro models (reasoning)
+            const modelSets = [
+              { models: provider.models.flash, tier: 'Flash' },
+              { models: provider.models.pro, tier: 'Pro' }
+            ];
 
-    visionResult.analysisTimestamp = new Date().toISOString();
-    visionResult.ocrEnhanced = extractedText.length > 0;
-    visionResult.reportType = mode === 'report' ? 'medical_report' : 'medication';
+            for (const modelSet of modelSets) {
+              if (visionResult) break;
 
-    // Bug #7 Fix: Compute both clinical flags here so the raw API response is
-    // self-consistent for any consumer (mobile clients, future integrations).
-    // scanner.js will recompute these after local DB enrichment — that's correct.
-    const cs = visionResult.confidenceScore || 0;
-    visionResult.authentic            = cs >= 80 && visionResult.originVerified === true;
-    visionResult.manualReviewRequired = cs > 0 && cs < 80;
+              for (const model of modelSet.models) {
+                try {
+                  console.log(`${provider.name} ${modelSet.tier}: Attempting ${model}...`);
+                  visionResult = await callGemini(model, prompt, image, mimeType, provider.key);
+                  if (visionResult) {
+                    console.log(`Success with ${provider.name} ${model}`);
+                    break;
+                  }
+                } catch (e) {
+                  errors.push(`${provider.name} ${modelSet.tier}(${model}): ${e.message}`);
+                  if (e.message.includes('not found') || e.message.includes('NOT_FOUND') || e.message.includes('not supported')) {
+                    continue; // Try next model in set
+                  }
+                  break; // Stop trying models in this set on other errors
+                }
+              }
+            }
+            break;
 
-    return res.status(200).json(visionResult);
+          case 'openrouter':
+            // Try each model via OpenRouter
+            for (const model of provider.models) {
+              try {
+                console.log(`OpenRouter: Attempting ${model}...`);
+                visionResult = await callOpenRouter(model, prompt, image, mimeType, provider.key);
+                if (visionResult) {
+                  console.log(`Success with OpenRouter ${model}`);
+                  break;
+                }
+              } catch (e) {
+                errors.push(`OpenRouter(${model}): ${e.message}`);
+                // Continue to next model
+              }
+            }
+            break;
+
+          case 'openai-compatible':
+            // Try OpenAI-compatible API
+            for (const model of provider.models) {
+              try {
+                console.log(`${provider.name}: Attempting ${model}...`);
+                visionResult = await callOpenAICompatible(
+                  model,
+                  prompt,
+                  image,
+                  mimeType,
+                  provider.key,
+                  provider.baseUrl,
+                  provider.special
+                );
+                  if (visionResult) {
+                    console.log(`Success with ${provider.name} ${model}`);
+                    break;
+                  }
+                } catch (e) {
+                  errors.push(`${provider.name}(${model}): ${e.message}`);
+                  // Continue to next model
+                }
+              }
+              break;
+            }
+          }
+
+        if (!visionResult) {
+          const isQuotaError = errors.some(e => e.includes('QuotaFailure') || e.includes('429') || e.includes('rate limit'));
+          if (isQuotaError) {
+            throw new Error("Intelligence Network Quota Exceeded. Please try again in a minute.");
+          }
+          // Return the most relevant error for the UI
+          const primaryError = errors[0] || 'Unknown Analysis Failure';
+          throw new Error(`MedVision Core Failure: ${primaryError}. (Providers tried: ${providers.map(p => p.name).join(', ')})`);
+        }
 
   } catch (err) {
     console.error('MedVision System-Wide Failure:', err.message);
@@ -290,5 +400,94 @@ async function callOpenRouter(modelName, prompt, imageData, mimeType, apiKey) {
   
   const res = JSON.parse(cleanText);
   res.engine = `Global Auditor (${modelName.split('/')[1]})`;
+  return res;
+}
+
+/**
+ * OpenAI-Compatible Multi-Model Call
+ * For services like NVIDIA NIM, DeepSeek, Groq, SambaNova, Fireworks AI, etc.
+ */
+async function callOpenAICompatible(modelName, prompt, imageData, mimeType, apiKey, baseUrl, isSpecial = false) {
+  // Special handling for Cohere which has a different API structure
+  if (isSpecial && modelName.includes('command')) {
+    // Cohere API call
+    const response = await fetch(`${baseUrl}/chat`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message: prompt,
+        model: modelName,
+        // Note: Cohere doesn't support image input in chat endpoint as of this writing
+        // For vision capabilities, would need to use their different endpoint
+        // For now, we'll pass image description in prompt if needed
+      })
+    });
+
+    if (!response.ok) throw new Error(await response.text());
+    const data = await response.json();
+    let text = data.text || '{}';
+
+    // Robustly extract JSON block even if conversational text is present
+    let cleanText = text;
+    const jsonMatch = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      cleanText = jsonMatch[1];
+    } else {
+      const braceMatch = cleanText.match(/\{[\s\S]*\}/);
+      if (braceMatch) {
+        cleanText = braceMatch[0];
+      }
+    }
+
+    const res = JSON.parse(cleanText);
+    res.engine = `Specialist (${modelName})`;
+    return res;
+  }
+
+  // Standard OpenAI-compatible API call
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://medswift.app", // Optional
+      "X-Title": "MedSwift Vision"
+    },
+    body: JSON.stringify({
+      model: modelName,
+      messages: [
+        {
+          "role": "user",
+          "content": [
+            { "type": "text", "text": prompt },
+            { "type": "image_url", "image_url": { "url": `data:${mimeType};base64,${imageData}` } }
+          ]
+        }
+      ],
+      "response_format": { "type": "json_object" }
+    })
+  });
+
+  if (!response.ok) throw new Error(await response.text());
+  const data = await response.json();
+  let text = data.choices[0].message.content || '{}';
+
+  // Robustly extract JSON block even if conversational text is present
+  let cleanText = text;
+  const jsonMatch = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (jsonMatch) {
+    cleanText = jsonMatch[1];
+  } else {
+    const braceMatch = cleanText.match(/\{[\s\S]*\}/);
+    if (braceMatch) {
+      cleanText = braceMatch[0];
+    }
+  }
+
+  const res = JSON.parse(cleanText);
+  res.engine = `Specialist (${modelName})`;
   return res;
 }
