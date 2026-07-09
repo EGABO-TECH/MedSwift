@@ -277,15 +277,14 @@ Return ONLY the raw JSON object.`;
       throw new Error(`MedVision Core Failure: ${primaryError}. (Providers tried: ${providers.map(p => p.name).join(', ')})`);
     }
 
+    // Return successful response
+    return res.status(200).json(visionResult);
   } catch (err) {
     console.error('MedVision System-Wide Failure:', err.message);
     // If the error message is an object (from stringification of Error), we want it clean
     const cleanMsg = typeof err.message === 'string' ? err.message : JSON.stringify(err.message);
     return res.status(500).json({ error: cleanMsg });
   }
-
-  // Return successful response
-  return res.status(200).json(visionResult);
 }
 
 /**
