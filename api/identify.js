@@ -259,18 +259,21 @@ Return ONLY the raw JSON object.`;
                 }
               }
               break;
-            }
-          }
-
-        if (!visionResult) {
-          const isQuotaError = errors.some(e => e.includes('QuotaFailure') || e.includes('429') || e.includes('rate limit'));
-          if (isQuotaError) {
-            throw new Error("Intelligence Network Quota Exceeded. Please try again in a minute.");
-          }
-          // Return the most relevant error for the UI
-          const primaryError = errors[0] || 'Unknown Analysis Failure';
-          throw new Error(`MedVision Core Failure: ${primaryError}. (Providers tried: ${providers.map(p => p.name).join(', ')})`);
         }
+      } catch (err) {
+        errors.push(`${provider.name} provider failed: ${err.message}`);
+      }
+    }
+
+    if (!visionResult) {
+      const isQuotaError = errors.some(e => e.includes('QuotaFailure') || e.includes('429') || e.includes('rate limit'));
+      if (isQuotaError) {
+        throw new Error("Intelligence Network Quota Exceeded. Please try again in a minute.");
+      }
+      // Return the most relevant error for the UI
+      const primaryError = errors[0] || 'Unknown Analysis Failure';
+      throw new Error(`MedVision Core Failure: ${primaryError}. (Providers tried: ${providers.map(p => p.name).join(', ')})`);
+    }
 
   } catch (err) {
     console.error('MedVision System-Wide Failure:', err.message);
