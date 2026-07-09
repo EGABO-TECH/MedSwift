@@ -50,6 +50,10 @@ const els = {
 document.addEventListener('DOMContentLoaded', async () => {
   await seedDemoData();
   setupEventListeners();
+  // Enable multiple file upload for drug interaction checking
+  if (els.uploadInput) {
+    els.uploadInput.multiple = true;
+  }
   // Ensure mode is initialized
   setAnalysisMode(appState.get('analysisMode') || 'medication');
 });
@@ -92,9 +96,18 @@ function setupEventListeners() {
     async function scannerTick() {
       const status = appState.get('scanStatus'); if (status !== 'scanning') { scanInterval = null; return; }
       if (appState.get('analysisMode') === 'medication') {
-        try { const barcodeText = await scanBarcode(els.video); if (barcodeText && barcodeText !== lastDetectedBarcode) { lastDetectedBarcode = barcodeText; handleBarcodeDetection(barcodeText); } } catch (e) {}
+        try {
+          const barcodeText = await scanBarcode(els.video);
+          if (barcodeText && barcodeText !== lastDetectedBarcode) {
+            lastDetectedBarcode = barcodeText;
+            handleBarcodeDetection(barcodeText).catch(err => console.error('Error in barcode detection handling:', err));
+          }
+        } catch (e) {}
       }
-      if (appState.get('scanStatus') === 'scanning' && !isScannerBusy()) { const frame = await captureFrame(els.video); if (frame) await processVisionFrame(frame); }
+      if (appState.get('scanStatus') === 'scanning' && !isScannerBusy()) {
+        const frame = await captureFrame(els.video);
+        if (frame) await processVisionFrame(frame);
+      }
       if (appState.get('scanStatus') === 'scanning') scanInterval = setTimeout(scannerTick, 1000);
     }
     scanInterval = setTimeout(scannerTick, 1000);
@@ -103,16 +116,117 @@ function setupEventListeners() {
   addListenerSafe(els.btnUploadScan, 'click', () => { if (els.uploadInput) els.uploadInput.click(); });
 
   addListenerSafe(els.uploadInput, 'change', async (e) => {
-    const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
-    reader.onload = async (event) => {
-      let base64Image = event.target.result; try { base64Image = await resizeImage(base64Image, 1280); } catch (e) { console.warn('Image optimization skipped:', e); }
-      stopCamera(); if (scanInterval) clearTimeout(scanInterval);
-      if (els.uploadPreview) { els.uploadPreview.src = base64Image; els.uploadPreview.classList.remove('hidden'); }
-      if (els.placeholder) els.placeholder.classList.add('hidden'); if (els.video) els.video.classList.remove('is-active');
-      showScannerActive(); if (appState.get('analysisMode') === 'medication') { const barcodeText = await scanBarcodeFromImage(els.uploadPreview); if (barcodeText) handleBarcodeDetection(barcodeText); }
-      await processVisionFrame(base64Image); if (els.uploadInput) els.uploadInput.value = '';
-    };
-    reader.readAsDataURL(file);
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Handle multiple files
+    if (files.length > 1) {
+      // Store files for later processing (e.g., for interaction checking)
+      const filesArray = Array.from(files);
+      appState.set('pendingUploadFiles', filesArray);
+
+      // Update UI to show multiple files selected
+      if (els.uploadPreview) {
+        // Show first image as preview
+        const file = files[0];
+        try {
+          const base64Image = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              let base64Image = event.target.result;
+              try {
+                base64Image = resizeImage(base64Image, 1280);
+              } catch (e) {
+                console.warn('Image optimization skipped:', e);
+              }
+              resolve(base64Image);
+            };
+            reader.onerror = (e) => reject(e);
+            reader.readAsDataURL(file);
+          });
+
+          if (els.uploadPreview) {
+            els.uploadPreview.src = base64Image;
+            els.uploadPreview.classList.remove('hidden');
+          }
+        } catch (err) {
+          console.error('Error processing first file for preview:', err);
+          // Continue anyway - show UI even if preview fails
+        }
+      }
+
+      // Hide scan controls and show multi-file ready state
+      els.placeholder.classList.add('hidden');
+      els.video.classList.remove('is-active');
+      els.beam.classList.add('hidden');
+      els.prompt.classList.add('hidden');
+      els.controls.classList.add('hidden');
+      els.verificationZone.classList.remove('hidden');
+
+      // Show indication that multiple files are ready for interaction check
+      const verificationZone = document.getElementById('verification-zone');
+      if (verificationZone) {
+        verificationZone.innerHTML = `
+          <div style="text-align: center; padding: 20px; color: var(--teal-primary);">
+            <i data-lucide="check-circle" style="width:32px;height:32px;margin-bottom:12px;"></i>
+            <p>${files.length} files selected for analysis</p>
+            <button id="btn-check-interactions" style="background: var(--teal-primary); color: white; border: none; padding: 8px 16px; border-radius: 4px; font-weight: 500; cursor: pointer;">
+              Check Drug Interactions
+            </button>
+          </div>
+        `;
+        lucide.createIcons();
+
+        // Add listener for the interaction check button
+        setTimeout(() => {
+          const btnCheckInteractions = document.getElementById('btn-check-interactions');
+          if (btnCheckInteractions) {
+            btnCheckInteractions.addEventListener('click', async () => {
+              await handleMultiFileInteractionCheck();
+            });
+          }
+        }, 100);
+      }
+    } else {
+      // Single file handling (original logic)
+      const file = files[0];
+      try {
+        const base64Image = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            let base64Image = event.target.result;
+            try {
+              base64Image = resizeImage(base64Image, 1280);
+            } catch (e) {
+              console.warn('Image optimization skipped:', e);
+            }
+            resolve(base64Image);
+          };
+          reader.onerror = (e) => reject(e);
+          reader.readAsDataURL(file);
+        });
+
+        stopCamera();
+        if (scanInterval) clearTimeout(scanInterval);
+        if (els.uploadPreview) {
+          els.uploadPreview.src = base64Image;
+          els.uploadPreview.classList.remove('hidden');
+        }
+        if (els.placeholder) els.placeholder.classList.add('hidden');
+        if (els.video) els.video.classList.remove('is-active');
+        showScannerActive();
+        if (appState.get('analysisMode') === 'medication') {
+          const barcodeText = await scanBarcodeFromImage(els.uploadPreview);
+          if (barcodeText) handleBarcodeDetection(barcodeText).catch(err => console.error('Error in barcode detection handling:', err));
+        }
+        await processVisionFrame(base64Image);
+        if (els.uploadInput) els.uploadInput.value = '';
+      } catch (err) {
+        console.error('Error processing file:', err);
+        showInlineError('Failed to process image. Please try again.');
+        resetScannerUI();
+      }
+    }
   });
 
   addListenerSafe(els.btnCancelAnalysis, 'click', () => { if (analysisController) { analysisController.abort(); analysisController = null; } resetScannerUI(); });
@@ -194,6 +308,136 @@ function showCameraError() {
   setTimeout(() => toast.remove(), 4000);
 }
 
+// ─── MULTI-FILE INTERACTION CHECK ───
+async function handleMultiFileInteractionCheck() {
+  const files = appState.get('pendingUploadFiles');
+  if (!files || !files.length) {
+    showInlineError('No files selected for analysis');
+    return;
+  }
+
+  appState.set('scanStatus', 'verifying');
+  showScannerActive(); // Show scanning UI
+  els.beam.classList.add('intelligence-glow');
+  els.shimmer.classList.remove('hidden');
+  els.intelligenceIcon.classList.add('status-pulse');
+  els.cancelAnalysisBox.classList.remove('hidden');
+
+  try {
+    // Process all files to extract medication information
+    const medicationPromises = files.map(async (file, index) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          let base64Image = event.target.result;
+          try {
+            // Process image for medication identification
+            base64Image = await resizeImage(base64Image, 1280);
+
+            // Use existing identifyMedication function to get drug info
+            // Note: We're using a temporary AbortController since we don't need to cancel this
+            const controller = new AbortController();
+            const result = await identifyMedication(
+              base64Image,
+              controller.signal,
+              appState.get('analysisMode')
+            );
+
+            resolve({
+              index,
+              name: file.name,
+              result: result.error ? null : result,
+              error: result.error
+            });
+          } catch (err) {
+            resolve({
+              index,
+              name: file.name,
+              result: null,
+              error: err.message || 'Processing failed'
+            });
+          }
+        };
+        reader.onerror = () => {
+          resolve({
+            index,
+            name: file.name,
+            result: null,
+            error: 'Failed to read file'
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    const medicationResults = await Promise.all(medicationPromises);
+
+    // Filter out failed processes
+    const validResults = medicationResults
+      .filter(r => !r.error && r.result)
+      .map(r => r.result);
+
+    if (validResults.length < 2) {
+      throw new Error('Need at least 2 successfully processed medications to check interactions');
+    }
+
+    // Prepare data for interaction analysis
+    const medications = validResults.map(result => ({
+      drugName: result.drugName || 'Unknown',
+      genericName: result.genericName || '',
+      manufacturer: result.manufacturer || '',
+      indication: result.indication || ''
+    }));
+
+    // Call API for interaction analysis
+    const interactionResult = await analyzeDrugInteractions(medications);
+
+    // Display results
+    if (interactionResult.error) {
+      throw new Error(interactionResult.error);
+    }
+
+    showResultCard(interactionResult, 'interaction');
+    addToAuditTrail(interactionResult);
+
+  } catch (err) {
+    console.error('Multi-file interaction check error:', err);
+    showInlineError(err.message || 'Interaction analysis failed');
+  } finally {
+    // Reset UI scanning state
+    els.beam.classList.remove('intelligence-glow');
+    els.shimmer.classList.add('hidden');
+    els.intelligenceIcon.classList.remove('status-pulse');
+    els.cancelAnalysisBox.classList.add('hidden');
+    appState.set('scanStatus', 'scanning');
+    // Clear pending files
+    appState.set('pendingUploadFiles', null);
+  }
+}
+
+// ─── DRUG INTERACTION ANALYSIS ───
+async function analyzeDrugInteractions(medications) {
+  try {
+    const response = await fetch('/api/identify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'interaction',
+        medications: medications
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (err) {
+    throw new Error(`Interaction analysis failed: ${err.message}`);
+  }
+}
+
 // ─── VISION PROCESSING CORE ───
 async function processVisionFrame(frame) {
   if (isScannerBusy()) return; // Double-guard
@@ -244,6 +488,11 @@ async function processVisionFrame(frame) {
       console.log('Analysis cancelled by user.');
     } else {
       console.error('Unexpected analysis error:', err);
+      // Revert verifying state UI changes when error occurs
+      els.beam.classList.remove('intelligence-glow');
+      els.shimmer.classList.add('hidden');
+      els.intelligenceIcon.classList.remove('status-pulse');
+      els.cancelAnalysisBox.classList.add('hidden');
       appState.set('scanStatus', 'scanning');
     }
   }
