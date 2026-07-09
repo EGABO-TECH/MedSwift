@@ -18,7 +18,8 @@ export default async function handler(req, res) {
       { name: 'Cohere', envVar: 'COHERE_API_KEY' },
       { name: 'Kimi (Moonshot)', envVar: 'KIMI_API_KEY' },
       { name: 'Minimax', envVar: 'MINIMAX_API_KEY' },
-      { name: 'Z.AI', envVar: 'ZAI_API_KEY' }
+      { name: 'Z.AI', envVar: 'ZAI_API_KEY' },
+      { name: 'Mistral', envVar: 'MISTRAL_API_KEY' }
     ];
 
     const hasOpenAIProvider = openaiCompatibleProviders.some(p => process.env[p.envVar]);
@@ -158,7 +159,8 @@ Return ONLY the raw JSON object.`;
       { name: 'Cohere', envVar: 'COHERE_API_KEY', baseUrl: 'https://api.cohere.ai/v1', models: ['command-r-plus'], special: true },
       { name: 'Kimi (Moonshot)', envVar: 'KIMI_API_KEY', baseUrl: 'https://api.moonshot.cn/v1', models: ['kimi-k2-0905-preview'] },
       { name: 'Minimax', envVar: 'MINIMAX_API_KEY', baseUrl: 'https://api.minimaxi.com/v1', models: ['abab6.5s-chat'] },
-      { name: 'Z.AI', envVar: 'ZAI_API_KEY', baseUrl: 'https://api.z.ai/v1', models: ['z-ai-plus'] }
+      { name: 'Z.AI', envVar: 'ZAI_API_KEY', baseUrl: 'https://api.z.ai/v1', models: ['z-ai-plus'] },
+      { name: 'Mistral', envVar: 'MISTRAL_API_KEY', baseUrl: 'https://api.mistral.ai/v1', models: ['pixtral-large-latest'] }
     ];
 
     for (const providerDef of openaiCompatibleProviderDefs) {
