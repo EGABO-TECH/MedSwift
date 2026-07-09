@@ -176,6 +176,18 @@
               </button>
             </div>
 
+            <div id="mode-selector" style="position: absolute; bottom: 132px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; gap: 8px; align-items: center;">
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+                <button id="mode-medication" type="button" class="btn btn-accent" data-mode="medication" aria-pressed="true" style="padding: 8px 12px; font-size: 12px; border-radius: 999px;">Medication</button>
+                <button id="mode-report" type="button" class="btn btn-ghost" data-mode="report" aria-pressed="false" style="padding: 8px 12px; font-size: 12px; border-radius: 999px;">Medical Report</button>
+              </div>
+              <div id="report-text-panel" class="hidden" style="width: min(320px, calc(100vw - 48px)); background: rgba(10, 15, 30, 0.72); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; backdrop-filter: blur(10px);">
+                <label for="report-text-input" style="display: block; margin-bottom: 6px; font-size: 11px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1px;">Paste medical report text</label>
+                <textarea id="report-text-input" rows="5" style="width: 100%; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03); color: #fff; border-radius: 8px; padding: 8px; resize: vertical; font-size: 12px; box-sizing: border-box;"></textarea>
+                <button id="btn-analyze-text" type="button" class="btn btn-accent" style="margin-top: 8px; width: 100%; padding: 10px; font-size: 12px;">Summarize Report</button>
+              </div>
+            </div>
+
             <!-- Scanner Controls -->
             <div class="scanner-controls-bar" id="scanner-controls">
               <button id="btn-start-scan" class="btn btn-accent btn-scan-live">

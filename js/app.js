@@ -1,6 +1,6 @@
 import { appState } from './state.js';
 import { seedDemoData } from './db.js';
-import { startCamera, captureFrame, identifyMedication, isScannerBusy, scanBarcode, scanBarcodeFromImage } from './scanner.js';
+import { startCamera, captureFrame, identifyMedication, analyzeReportText, isScannerBusy, scanBarcode, scanBarcodeFromImage } from './scanner.js';
 
 let activeStream = null;
 let scanInterval = null;
@@ -34,7 +34,14 @@ const els = {
   resultTitle:       document.getElementById('result-title'),
   resultDataRows:    document.getElementById('result-data-rows'),
   resultDetailsBox:  document.getElementById('result-details-box'),
-
+  modeMedication:    document.getElementById('mode-medication'),
+  modeReport:        document.getElementById('mode-report'),
+  reportTextPanel:   document.getElementById('report-text-panel'),
+  reportTextInput:   document.getElementById('report-text-input'),
+  btnAnalyzeText:    document.getElementById('btn-analyze-text'),
+  scannerPrompt:     document.getElementById('scanner-prompt'),
+  scanPromptText:    document.querySelector('#scanner-prompt .prompt-text'),
+  scanPromptIcon:    document.querySelector('#scanner-prompt .prompt-icon i'),
   // Audit Trail
   auditList:         document.getElementById('audit-trail-list')
 };
@@ -43,6 +50,7 @@ const els = {
 document.addEventListener('DOMContentLoaded', async () => {
   await seedDemoData();
   setupEventListeners();
+  setAnalysisMode(appState.get('analysisMode') || 'medication');
 
   // ─── AUGUST INTELLIGENCE INITIALIZATION ───
   // Request Notification permission for Empathetic Nudges & Alerts
@@ -68,6 +76,47 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ─── EVENT LISTENERS ───
 function setupEventListeners() {
 
+  els.modeMedication.addEventListener('click', () => {
+    setAnalysisMode('medication');
+  });
+
+  els.modeReport.addEventListener('click', () => {
+    setAnalysisMode('report');
+  });
+
+  els.btnAnalyzeText.addEventListener('click', async () => {
+    const text = (els.reportTextInput.value || '').trim();
+    if (!text) {
+      showInlineError('Please paste a medical report before summarizing.');
+      return;
+    }
+
+    appState.set('scanStatus', 'verifying');
+    showScannerActive();
+    els.reportTextInput.disabled = true;
+    els.btnAnalyzeText.disabled = true;
+    els.btnAnalyzeText.innerHTML = '<span class="btn-spinner" style="width:14px;height:14px;border-width:2px;"></span> Summarizing...';
+
+    try {
+      const result = await analyzeReportText(text);
+      if (result?.error) {
+        showInlineError(result.error);
+        appState.set('scanStatus', 'idle');
+        resetScannerUI();
+        return;
+      }
+      showResultCard(result, 'report');
+      addToAuditTrail(result);
+    } catch (err) {
+      console.error(err);
+      showInlineError('Report summarization failed. Please try again.');
+    } finally {
+      els.reportTextInput.disabled = false;
+      els.btnAnalyzeText.disabled = false;
+      els.btnAnalyzeText.innerHTML = 'Summarize Report';
+    }
+  });
+
   // ── Start Live Vision ──
   els.btnStartScan.addEventListener('click', async () => {
     console.log('MedVision App: Starting scan flow...');
@@ -90,14 +139,16 @@ function setupEventListeners() {
         return;
       }
 
-      // Part A: Barcode Detection
-      try {
-        const barcodeText = await scanBarcode(els.video);
-        if (barcodeText && barcodeText !== lastDetectedBarcode) {
-          lastDetectedBarcode = barcodeText;
-          handleBarcodeDetection(barcodeText);
-        }
-      } catch (e) { /* ZXing NotFoundException is expected */ }
+      // Part A: Barcode Detection (Medication mode only)
+      if (appState.get('analysisMode') === 'medication') {
+        try {
+          const barcodeText = await scanBarcode(els.video);
+          if (barcodeText && barcodeText !== lastDetectedBarcode) {
+            lastDetectedBarcode = barcodeText;
+            handleBarcodeDetection(barcodeText);
+          }
+        } catch (e) { /* ZXing NotFoundException is expected */ }
+      }
 
       // Part B: Vision Analysis — only if still scanning AND not already busy
       if (appState.get('scanStatus') === 'scanning' && !isScannerBusy()) {
@@ -144,10 +195,11 @@ function setupEventListeners() {
       showScannerActive(); // Shows beam, hides controls
 
       // Part 2: Trigger the Sentinel Analysis
-      // Attempt barcode scan from the image first
-      const barcodeText = await scanBarcodeFromImage(els.uploadPreview);
-      if (barcodeText) {
-        handleBarcodeDetection(barcodeText);
+      if (appState.get('analysisMode') === 'medication') {
+        const barcodeText = await scanBarcodeFromImage(els.uploadPreview);
+        if (barcodeText) {
+          handleBarcodeDetection(barcodeText);
+        }
       }
 
       // Run Vision analysis
@@ -189,6 +241,54 @@ function setupEventListeners() {
 }
 
 // ─── SCANNER UI STATE ───
+function setAnalysisMode(mode) {
+  const normalizedMode = mode === 'report' ? 'report' : 'medication';
+  if (appState.get('analysisMode') === normalizedMode) {
+    return;
+  }
+
+  appState.set('analysisMode', normalizedMode);
+  resetScannerUI();
+
+  const isMedication = normalizedMode === 'medication';
+  els.modeMedication.classList.toggle('btn-accent', isMedication);
+  els.modeMedication.classList.toggle('btn-ghost', !isMedication);
+  els.modeMedication.setAttribute('aria-pressed', String(isMedication));
+  els.modeMedication.style.background = isMedication ? '' : 'rgba(255,255,255,0.04)';
+  els.modeReport.classList.toggle('btn-accent', !isMedication);
+  els.modeReport.classList.toggle('btn-ghost', isMedication);
+  els.modeReport.setAttribute('aria-pressed', String(!isMedication));
+  els.modeReport.style.background = !isMedication ? '' : 'rgba(255,255,255,0.04)';
+
+  if (els.reportTextPanel) {
+    els.reportTextPanel.classList.toggle('hidden', isMedication);
+  }
+
+  if (els.scanPromptText) {
+    els.scanPromptText.textContent = isMedication ? 'Focus Medication' : 'Capture Medical Report';
+  }
+  if (els.scanPromptIcon) {
+    els.scanPromptIcon.setAttribute('data-lucide', isMedication ? 'scan-eye' : 'file-text');
+  }
+  if (els.btnStartScan) {
+    els.btnStartScan.innerHTML = isMedication
+      ? '<i data-lucide="brain-circuit"></i> Start Vision'
+      : '<i data-lucide="file-text"></i> Analyze Report';
+  }
+  if (els.btnUploadScan) {
+    els.btnUploadScan.innerHTML = isMedication
+      ? '<i data-lucide="image-plus"></i> Upload Image'
+      : '<i data-lucide="file-image"></i> Upload Report Image';
+  }
+  if (els.btnDownloadPdf) {
+    els.btnDownloadPdf.innerHTML = isMedication
+      ? '<i data-lucide="download"></i> Download PDF Report'
+      : '<i data-lucide="download"></i> Download Medical PDF';
+  }
+
+  lucide.createIcons();
+}
+
 function showScannerActive() {
   els.placeholder.classList.add('hidden');
   els.video.classList.add('is-active');
@@ -227,7 +327,7 @@ async function processVisionFrame(frame) {
   analysisController = new AbortController();
 
   try {
-    const result = await identifyMedication(frame, analysisController.signal);
+    const result = await identifyMedication(frame, analysisController.signal, appState.get('analysisMode'));
 
     // Null means the scanner was already busy — silently ignore
     if (result === null) {
@@ -256,7 +356,7 @@ async function processVisionFrame(frame) {
     els.cancelAnalysisBox.classList.add('hidden');
     els.intelligenceIcon.classList.remove('status-pulse');
 
-    showResultCard(result);
+    showResultCard(result, appState.get('analysisMode'));
     addToAuditTrail(result);
 
   } catch (err) {
@@ -368,7 +468,82 @@ function updateResultCardWithLedger(batch) {
 }
 
 // ─── RESULT CARD ───
-function showResultCard(result) {
+function showResultCard(result, mode = appState.get('analysisMode')) {
+  if (mode === 'report') {
+    const isOk     = result.authentic === true;
+    const isManual = result.manualReviewRequired === true;
+    const isLow    = !isOk && !isManual;
+
+    els.resultCard.className = 'result-card slide-up truth-report';
+    if (isManual) els.resultCard.classList.add('manual-review');
+    if (isLow)    els.resultCard.classList.add('unverified');
+
+    const confidence = result.confidenceScore ?? 0;
+    const confColor  = confidence >= 80 ? '#10B981' : (confidence >= 50 ? '#EAB308' : '#EF4444');
+    const titleText = result.title || 'Concise Medical Report';
+    const summary = result.summary || 'No concise summary was generated. Please review the source document directly.';
+    const findings = Array.isArray(result.keyFindings) && result.keyFindings.length > 0 ? result.keyFindings : [];
+    const recommendations = Array.isArray(result.recommendations) && result.recommendations.length > 0 ? result.recommendations : [];
+    const followUp = result.followUp || 'Discuss the findings with the treating clinician.';
+
+    els.resultIcon.setAttribute('data-lucide', isOk ? 'file-check-2' : (isManual ? 'alert-circle' : 'file-warning'));
+    els.resultTitle.textContent = `Medical Report: ${titleText}`;
+
+    els.resultDataRows.innerHTML = `
+      <div class="data-row">
+        <span class="data-label">Document Type</span>
+        <span class="data-value" style="font-family: 'Playfair Display', serif; font-size: 16px;">Written Medical Report</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Confidence</span>
+        <span class="data-value" style="color: ${confColor}; font-weight: 800;">${confidence}%</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Source Context</span>
+        <span class="data-value" style="font-size: 12px; color: var(--teal-primary); opacity: 0.9;">${escapeHtml(result.sourceContext || 'Clinical documentation')}</span>
+      </div>
+    `;
+
+    els.resultDetailsBox.innerHTML = `
+      <div class="detail-block" style="border: 1px solid rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05);">
+        <div class="detail-title" style="color: #10B981;"><i data-lucide="file-text"></i> Concise Summary</div>
+        <div class="detail-text">${escapeHtml(summary)}</div>
+      </div>
+      ${findings.length > 0 ? `
+      <div class="detail-block">
+        <div class="detail-title"><i data-lucide="list-checks"></i> Key Findings</div>
+        <div class="detail-text">
+          <ul style="margin: 0; padding-left: 16px; display: grid; gap: 6px;">
+            ${findings.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+          </ul>
+        </div>
+      </div>` : ''}
+      ${recommendations.length > 0 ? `
+      <div class="detail-block">
+        <div class="detail-title"><i data-lucide="stethoscope"></i> Recommendations</div>
+        <div class="detail-text">
+          <ul style="margin: 0; padding-left: 16px; display: grid; gap: 6px;">
+            ${recommendations.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+          </ul>
+        </div>
+      </div>` : ''}
+      <div class="detail-block" style="background: rgba(234, 179, 8, 0.05); border: 1px solid rgba(234, 179, 8, 0.2);">
+        <div class="detail-title" style="color: #EAB308;"><i data-lucide="calendar-check-2"></i> Follow-Up</div>
+        <div class="detail-text">${escapeHtml(followUp)}</div>
+      </div>
+      <div class="detail-block" style="background: rgba(255, 255, 255, 0.01); border: 1px dashed rgba(255, 255, 255, 0.05);">
+        <div class="detail-text" style="font-size: 10px; opacity: 0.4; text-transform: uppercase; letter-spacing: 1px; font-family: 'JetBrains Mono', monospace;">
+          Ref: ${Date.now()} | Engine: ${result.engine || 'MedSwift Report AI'} | Latency: ${result.verifyMs ?? '—'}ms
+        </div>
+      </div>
+    `;
+
+    appState.set('lastResult', result);
+    els.resultCard.classList.remove('hidden');
+    lucide.createIcons();
+    return;
+  }
+
   const isOk     = result.authentic === true;
   const isManual = result.manualReviewRequired === true;
   const isLow    = !isOk && !isManual;
@@ -513,6 +688,116 @@ function showResultCard(result) {
   lucide.createIcons();
 }
 
+async function generateMedicalReportPDF(result) {
+  let logoTag = '<div style="width:48px;height:48px;background:#10B981;border-radius:8px;display:inline-block;"></div>';
+  try {
+    const logoResp = await fetch('Assets/MedSwift-Symbol.png');
+    if (logoResp.ok) {
+      const blob = await logoResp.blob();
+      const logoDataUrl = await new Promise((res) => {
+        const reader = new FileReader();
+        reader.onloadend = () => res(reader.result);
+        reader.readAsDataURL(blob);
+      });
+      logoTag = `<img src="${logoDataUrl}" style="width:48px;height:48px;display:block;" alt="Logo" />`;
+    }
+  } catch (e) { console.warn('Medical PDF logo skipped:', e); }
+
+  const title = escapeHtml(result.title || 'Concise Medical Report');
+  const summary = escapeHtml(result.summary || 'No concise summary generated.');
+  const findings = Array.isArray(result.keyFindings) ? result.keyFindings : [];
+  const recommendations = Array.isArray(result.recommendations) ? result.recommendations : [];
+  const followUp = escapeHtml(result.followUp || 'Discuss the findings with the treating clinician.');
+  const refNo = `MR-${Date.now()}`;
+  const dateStr = new Date().toLocaleString();
+
+  const findingsHtml = findings.length > 0
+    ? findings.map(item => `<li style="margin-bottom: 6px;">${escapeHtml(item)}</li>`).join('')
+    : '<li>No specific findings were extracted.</li>';
+  const recommendationsHtml = recommendations.length > 0
+    ? recommendations.map(item => `<li style="margin-bottom: 6px;">${escapeHtml(item)}</li>`).join('')
+    : '<li>No treatment recommendations were extracted.</li>';
+
+  const htmlString = `
+    <div style="width: 680px; padding: 50px; background: #FFFFFF; color: #111111; font-family: Arial, sans-serif; box-sizing: border-box;">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="padding-bottom: 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td width="60" valign="middle">${logoTag}</td>
+                <td valign="middle" style="padding-left: 16px;">
+                  <div style="font-size: 18px; font-weight: 700; color: #111; text-transform: uppercase; letter-spacing: 3px;">MedSwift Report</div>
+                  <div style="font-size: 10px; color: #6B7280; text-transform: uppercase; letter-spacing: 2px; margin-top: 3px;">Concise Clinical Summary</div>
+                </td>
+                <td valign="middle" align="right">
+                  <div style="font-size: 9px; color: #9CA3AF;">Ref: ${refNo}</div>
+                  <div style="font-size: 9px; color: #9CA3AF; margin-top: 2px;">${dateStr}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr><td height="2" bgcolor="#10B981" style="font-size:0;line-height:0;padding-bottom:24px;">&nbsp;</td></tr>
+        <tr>
+          <td style="padding-bottom: 18px;">
+            <div style="font-size: 22px; font-weight: 700; color: #111;">${title}</div>
+            <div style="font-size: 12px; color: #6B7280; margin-top: 8px;">Generated from a scanned written medical report using OCR and AI summarization.</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-bottom: 24px;">
+            <div style="background: #F9FAFB; border: 1px solid #E5E7EB; padding: 16px; border-radius: 8px;">
+              <div style="font-size: 10px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Summary</div>
+              <div style="font-size: 12px; color: #374151; line-height: 1.6;">${summary}</div>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-bottom: 24px;">
+            <div style="background: #F9FAFB; border: 1px solid #E5E7EB; padding: 16px; border-radius: 8px;">
+              <div style="font-size: 10px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Key Findings</div>
+              <ul style="margin: 0; padding-left: 16px; font-size: 12px; color: #374151; line-height: 1.6;">${findingsHtml}</ul>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-bottom: 24px;">
+            <div style="background: #F9FAFB; border: 1px solid #E5E7EB; padding: 16px; border-radius: 8px;">
+              <div style="font-size: 10px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Recommendations</div>
+              <ul style="margin: 0; padding-left: 16px; font-size: 12px; color: #374151; line-height: 1.6;">${recommendationsHtml}</ul>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-bottom: 24px;">
+            <div style="background: rgba(234, 179, 8, 0.05); border: 1px solid rgba(234, 179, 8, 0.2); padding: 16px; border-radius: 8px;">
+              <div style="font-size: 10px; font-weight: 700; color: #EAB308; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Follow-Up</div>
+              <div style="font-size: 12px; color: #374151; line-height: 1.6;">${followUp}</div>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="border-top: 1px solid #E5E7EB; padding-top: 16px;">
+            <div style="font-size: 8px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.6;">
+              Informational Use Only: This report is an AI-assisted summary of a clinical document and should be reviewed by a qualified professional.
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>`;
+
+  const opt = {
+    margin: 0.3,
+    filename: 'medswift-medical-report.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+  };
+
+  await html2pdf().set(opt).from(htmlString).save();
+}
+
 // ─── INLINE ERROR (scan still active) ───
 function showInlineError(message) {
   const existing = document.getElementById('scan-inline-error');
@@ -545,6 +830,10 @@ function resetScannerUI() {
   appState.set('scanStatus', 'idle');
   appState.set('currentBatch', null);
   lastDetectedBarcode = null;
+  if (els.reportTextInput) els.reportTextInput.value = '';
+  if (els.btnAnalyzeText) els.btnAnalyzeText.innerHTML = 'Summarize Report';
+  if (els.reportTextInput) els.reportTextInput.disabled = false;
+  if (els.btnAnalyzeText) els.btnAnalyzeText.disabled = false;
 
   els.resultCard.classList.add('hidden');
   els.uploadPreview.classList.add('hidden');
@@ -588,16 +877,7 @@ function renderAuditTrail() {
     const color  = ok ? 'var(--success)' : (manual ? '#EAB308' : 'var(--danger)');
     const bg     = ok ? 'rgba(34,197,94,0.1)' : (manual ? 'rgba(234,179,8,0.1)' : 'rgba(239,68,68,0.1)');
     const icon   = ok ? 'check' : (manual ? 'alert-circle' : 'x');
-    const name   = scan.drugName || 'Unknown Product';
-    const time   = scan.timestamp ? new Date(scan.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-
-    return `
-      <div class="audit-item" style="
-        animation: slideUp 0.3s ease ${i * 0.05}s forwards;
-        opacity: 0;
-        transform: translateY(10px);
-        border-color: ${color};
-      ">
+    const name   = scan.drugName || scan.title || 'Unknown Report';
         <div class="audit-item-icon" style="background: ${bg};">
           <i data-lucide="${icon}" style="width: 14px; height: 14px; color: ${color};"></i>
         </div>
@@ -626,6 +906,11 @@ function renderAuditTrail() {
  * Constructing a clean, high-contrast template specifically for PDF.
  */
 async function generatePDFReport(result) {
+  if ((appState.get('analysisMode') || 'medication') === 'report') {
+    await generateMedicalReportPDF(result);
+    return;
+  }
+
   // 1. Pre-load logo as base64 to ensure it renders in the isolated PDF context
   let logoTag = '<div style="width:48px;height:48px;background:#10B981;border-radius:8px;display:inline-block;"></div>';
   try {

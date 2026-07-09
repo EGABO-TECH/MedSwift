@@ -131,7 +131,32 @@ export async function captureFrame(videoEl) {
 }
 
 // ─── MAIN IDENTIFICATION FUNCTION ───
-export async function identifyMedication(base64Image, signal) {
+export async function analyzeReportText(text) {
+  const payload = {
+    mode: 'report',
+    text: text.trim()
+  };
+
+  try {
+    const response = await fetch('/api/identify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ error: 'Unknown proxy error' }));
+      throw new Error(errData.error || `Proxy returned ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error('MedVision Report Text Analysis Error:', err.message);
+    return { error: err.message || 'Report summarization unavailable' };
+  }
+}
+
+export async function identifyMedication(base64Image, signal, mode = 'medication') {
   if (_isProcessing) {
     return null; // Silently drop — a scan is already underway
   }
@@ -167,7 +192,8 @@ export async function identifyMedication(base64Image, signal) {
       signal,
       body: JSON.stringify({ 
         image: base64Image.split(',')[1],
-        mimeType: mimeType
+        mimeType: mimeType,
+        mode: mode
       })
     });
 
@@ -177,6 +203,22 @@ export async function identifyMedication(base64Image, signal) {
     }
 
     const visionResult = await response.json();
+
+    if (mode === 'report') {
+      const finalResult = {
+        ...visionResult,
+        authentic:            (visionResult.confidenceScore ?? 0) >= 70,
+        manualReviewRequired: (visionResult.confidenceScore ?? 0) > 0 && (visionResult.confidenceScore ?? 0) < 70,
+        verifyMs:             Math.round(performance.now() - startTime),
+        timestamp:            new Date().toISOString()
+      };
+
+      if ((finalResult.confidenceScore ?? 0) >= 90) {
+        await cacheVisualSignature(imageHash, finalResult);
+      }
+
+      return finalResult;
+    }
 
     // 3. Local RxNorm/openFDA Cross-Reference Validation
     const localRef = await validateWithLocalDB(visionResult.drugName, visionResult.genericName);

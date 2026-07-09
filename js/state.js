@@ -39,5 +39,6 @@ export const appState = new StateManager({
   scanHistory: [],
   isOnline: navigator.onLine,
   ecoCoordinates: [],
-  syncQueueLength: 0
+  syncQueueLength: 0,
+  analysisMode: 'medication'
 });

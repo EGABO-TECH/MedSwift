@@ -19,6 +19,9 @@ build/
 .env.test.local
 .env.production.local
 
+# UI/UX Pro Max local assets
+.agents/skills/ui-ux-pro-max/
+
 # IDEs
 .vscode/
 .idea/

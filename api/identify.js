@@ -3,7 +3,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { image, mimeType = 'image/jpeg' } = req.body;
+  const { image, mimeType = 'image/jpeg', mode = 'medication', text = '' } = req.body;
   const geminiApiKey = process.env.GEMINI_API_KEY;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
 
@@ -13,33 +13,47 @@ export default async function handler(req, res) {
 
   try {
     // ─── STAGE 1: OCR PRE-PROCESSOR ───
-    let extractedText = '';
-    try {
-      const ocrKey = process.env.OCR_SPACE_KEY || 'helloworld';
-      const form = new URLSearchParams();
-      form.append('apikey', ocrKey);
-      form.append('base64Image', `data:${mimeType};base64,${image}`);
-      form.append('language', 'eng');
-      form.append('OCREngine', '2');
+    let extractedText = typeof text === 'string' ? text.trim() : '';
+    if (!extractedText && image) {
+      try {
+        const ocrKey = process.env.OCR_SPACE_KEY || 'helloworld';
+        const form = new URLSearchParams();
+        form.append('apikey', ocrKey);
+        form.append('base64Image', `data:${mimeType};base64,${image}`);
+        form.append('language', 'eng');
+        form.append('OCREngine', '2');
 
-      // Timeout the OCR call at 3s so it never blocks the Gemini pipeline
-      const ocrCtrl = new AbortController();
-      const ocrTimer = setTimeout(() => ocrCtrl.abort(), 3000);
-      const ocrResponse = await fetch('https://api.ocr.space/parse/image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: form,
-        signal: ocrCtrl.signal
-      });
-      clearTimeout(ocrTimer);
-      const ocrData = await ocrResponse.json();
-      extractedText = ocrData?.ParsedResults?.[0]?.ParsedText || '';
-    } catch (e) {
-      console.warn('OCR Skip/Timeout:', e.message);
+        // Timeout the OCR call at 3s so it never blocks the Gemini pipeline
+        const ocrCtrl = new AbortController();
+        const ocrTimer = setTimeout(() => ocrCtrl.abort(), 3000);
+        const ocrResponse = await fetch('https://api.ocr.space/parse/image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: form,
+          signal: ocrCtrl.signal
+        });
+        clearTimeout(ocrTimer);
+        const ocrData = await ocrResponse.json();
+        extractedText = ocrData?.ParsedResults?.[0]?.ParsedText || '';
+      } catch (e) {
+        console.warn('OCR Skip/Timeout:', e.message);
+      }
     }
 
     // ─── STAGE 2: TRIPLE-TIER RESILIENCE PIPELINE ───
-    const prompt = `You are a Senior Clinical Pharmacist and Regulatory Auditor. Identify this medication based on the image and text.
+    const prompt = mode === 'report'
+      ? `You are a clinical documentation assistant. Analyze the image of a written medical report and rewrite it into a concise, understandable medical report.
+Label context: "${extractedText}"
+Your task is to summarize the report clearly for a pharmacist or clinician. Return a JSON object with:
+- title (short, professional title)
+- summary (1-2 concise paragraphs that explain the main point in plain language)
+- keyFindings (array of short bullets capturing the major findings)
+- recommendations (array of short actionable recommendations)
+- followUp (one short sentence for follow-up or next steps)
+- confidenceScore (0-100)
+- sourceContext (brief note on the document type or context)
+Return ONLY the raw JSON object.`
+      : `You are a Senior Clinical Pharmacist and Regulatory Auditor. Identify this medication based on the image and text.
 Label context: "${extractedText}"
 Cross-reference your internal knowledge with the following Gold Standard Datasets:
 1. OpenFDA & EMA for manufacturer, regulatory status, and origin.
@@ -137,6 +151,7 @@ Return ONLY the raw JSON object.`;
 
     visionResult.analysisTimestamp = new Date().toISOString();
     visionResult.ocrEnhanced = extractedText.length > 0;
+    visionResult.reportType = mode === 'report' ? 'medical_report' : 'medication';
 
     // Bug #7 Fix: Compute both clinical flags here so the raw API response is
     // self-consistent for any consumer (mobile clients, future integrations).
