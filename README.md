@@ -53,18 +53,20 @@ MedSwift utilizes a proprietary **Triple-Tier Resilience Pipeline** to ensure 99
 
 ```mermaid
 graph TD
-    A[Mobile Camera / Image Upload] --> B{MedSwift Scanner}
-    B --> C[ZXing Barcode Engine]
-    B --> D[OCR.space Pre-processor]
-    D --> E[Intelligence Proxy - Vercel]
-    E --> F{Triple-Tier Pipeline}
-    F --> G[Gemini 2.0 Flash]
-    F --> H[Gemini 1.5 Pro]
-    F --> I[OpenRouter Safety Net]
-    G & H & I --> J[Truth Report™ JSON]
-    J --> K[Dexie.js Visual Vault]
-    J --> L[html2pdf.js Reporting]
-    L --> M[Downloadable PDF Audit]
+    A["Mobile Camera / Image Upload"] --> B{"MedSwift Scanner"}
+    B --> C["ZXing Barcode Engine"]
+    B --> D["OCR.space Pre-processor"]
+    D --> E["Intelligence Proxy - /api/identify"]
+    E --> F{"Triple-Tier Pipeline"}
+    F --> G["Gemini 2.0 Flash"]
+    F --> H["Gemini 1.5 Pro"]
+    F --> I["OpenRouter Safety Net"]
+    G --> J["Truth Report JSON"]
+    H --> J["Truth Report JSON"]
+    I --> J["Truth Report JSON"]
+    J --> K["Dexie.js Visual Vault (client-side cache)"]
+    J --> L["html2pdf.js Reporting (client-side PDF)"]
+    L --> M["Downloadable PDF Audit"]
 ```
 
 ---
