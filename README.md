@@ -52,7 +52,7 @@ MedSwift utilizes a proprietary **Triple-Tier Resilience Pipeline** to ensure 99
 ##  System Architecture
 
 ```mermaid
-graph MD
+graph TD
     A["Mobile Camera / Image Upload"] --> B{"MedSwift Scanner"}
     B --> C["ZXing Barcode Engine"]
     B --> D["OCR.space Pre-processor"]
