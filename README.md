@@ -1,7 +1,7 @@
 # MedSwift: Scan the Truth. Secure Your Health.
 
 <p align="center">
-  <img src="./Assets/MedSwift-Logo.png" alt="MedSwift Logo" width="500">
+  <img src="./Assets/MedSwift-Banner.png" alt="MedSwift Logo" width="500">
 </p>
 
 ---
