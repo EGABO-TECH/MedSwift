@@ -584,12 +584,12 @@ async function handleBarcodeDetection(rawText) {
   if (!gs1Data.gtin) return;
 
   console.log('MedVision Ledger: Searching for GTIN', gs1Data.gtin);
-  
+
   // Visual feedback: emerald flash and beam lock
   els.intelligenceIcon.style.color = '#10B981';
   els.beam.style.background = 'linear-gradient(90deg, transparent, #10B981, #34D399, #10B981, transparent)';
   els.beam.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.6)';
-  
+
   setTimeout(() => {
     els.intelligenceIcon.style.color = '';
     if (appState.get('scanStatus') === 'verifying') {
@@ -603,12 +603,20 @@ async function handleBarcodeDetection(rawText) {
   // Look up in our local medication ledger
   const { db } = await import('./db.js');
   const batch = await db.medicationBatch.where({ gtin: gs1Data.gtin, lot: gs1Data.lot }).first();
+  const refData = await db.referenceData.where('gtin').equals(gs1Data.gtin).first();
 
   if (batch) {
     console.log('MedVision Ledger: Batch found!', batch);
     // Store this in appState so showResultCard can use it
     appState.set('currentBatch', { ...gs1Data, ...batch, verified: true });
-    
+
+    if (refData) {
+      const offlineResult = buildOfflineReferenceResult(refData, { ...gs1Data, ...batch });
+      appState.set('lastResult', offlineResult);
+      showResultCard(offlineResult, 'medication');
+      addToAuditTrail(offlineResult);
+    }
+
     // If we're already showing a card, update it live
     if (!els.resultCard.classList.contains('hidden')) {
       updateResultCardWithLedger(appState.get('currentBatch'));
@@ -616,6 +624,36 @@ async function handleBarcodeDetection(rawText) {
   } else {
     appState.set('currentBatch', { ...gs1Data, verified: false });
   }
+}
+
+function buildOfflineReferenceResult(reference, batch = null) {
+  const baseName = reference?.brandName || batch?.gtin || 'Medication';
+  return {
+    drugName: baseName,
+    genericName: reference?.genericName || '',
+    manufacturer: reference?.manufacturer || 'Offline Reference Database',
+    indication: reference?.indication || reference?.dosageForm || 'Local reference verification only',
+    dosageInstructions: reference?.dosageInstructions || 'Follow package directions or pharmacist guidance.',
+    warnings: reference?.warnings || 'Please confirm product details with a licensed professional.',
+    storage: reference?.storage || 'Cool, dry place as directed on the label.',
+    confidenceScore: 65,
+    originVerified: false,
+    confidenceRationale: 'Offline fallback activated. The app switched to the local medication reference matrix because provider intelligence is unavailable.',
+    regulatoryStatus: reference?.regulatoryStatus || 'Offline reference only',
+    therapeuticClass: reference?.therapeuticClass || '',
+    pathway: reference?.pathway || '',
+    isEssentialMedicine: reference?.isEssentialMedicine ?? false,
+    lifestyleNudge: reference?.lifestyleNudge || 'Use the packaging and your pharmacist as the verification source until network intelligence is restored.',
+    suggestedBiomarkers: reference?.suggestedBiomarkers || [],
+    proactiveInsight: reference?.proactiveInsight || 'Local fallback mode is protecting continuity of service.',
+    authentic: false,
+    manualReviewRequired: true,
+    offlineFallback: true,
+    verifyMs: 0,
+    engine: 'Local Reference Matrix',
+    timestamp: new Date().toISOString(),
+    batch: batch || null
+  };
 }
 
 /**
