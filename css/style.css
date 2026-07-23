@@ -1135,7 +1135,9 @@ button {
 .data-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
   padding: 12px 16px;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -1143,6 +1145,8 @@ button {
 }
 
 .data-label {
+  flex: 0 0 auto;
+  min-width: 110px;
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
@@ -1151,10 +1155,14 @@ button {
 }
 
 .data-value {
+  flex: 1 1 220px;
+  min-width: 0;
   font-size: 14px;
   font-weight: 600;
   color: #FFFFFF;
   text-align: right;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Clinical Intelligence Blocks */
@@ -1190,6 +1198,8 @@ button {
   line-height: 1.6;
   color: rgba(255, 255, 255, 0.85);
   font-weight: 400;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Status Variants (Auras) */

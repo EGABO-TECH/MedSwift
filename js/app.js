@@ -801,6 +801,96 @@ function showResultCard(result, mode = appState.get('analysisMode')) {
     return;
   }
 
+  if (mode === 'interaction') {
+    const isOk     = result.authentic === true;
+    const isManual = result.manualReviewRequired === true;
+    const isLow    = !isOk && !isManual;
+
+    els.resultCard.className = 'result-card slide-up truth-report';
+    if (isManual) els.resultCard.classList.add('manual-review');
+    if (isLow)    els.resultCard.classList.add('unverified');
+
+    const confidence = Number(result.confidenceScore ?? 0);
+    const risk = result.interactionRiskLevel || 'UNKNOWN';
+    const evidence = result.evidenceLevel || 'Low';
+    const primaryConcern = result.primaryConcern || 'No specific interaction concern stated.';
+    const overallAssessment = result.overallAssessment || 'Interaction analysis unavailable.';
+    const compatibility = result.therapeuticCompatibility || 'No compatibility assessment available.';
+    const dosing = result.dosingConsiderations || 'No dosing guidance available.';
+    const monitoring = Array.isArray(result.monitoringRecommendations) && result.monitoringRecommendations.length > 0 ? result.monitoringRecommendations : [];
+    const alternatives = Array.isArray(result.alternativeRecommendations) && result.alternativeRecommendations.length > 0 ? result.alternativeRecommendations : [];
+    const counseling = result.patientCounseling || 'No patient counseling statement provided.';
+
+    els.resultIcon.setAttribute('data-lucide', isOk ? 'shield-check' : (isManual ? 'alert-circle' : 'shield-alert'));
+    els.resultTitle.textContent = `Drug Interaction Review: ${risk}`;
+
+    els.resultDataRows.innerHTML = `
+      <div class="data-row">
+        <span class="data-label">Risk Level</span>
+        <span class="data-value" style="font-size: 16px; font-weight: 800; color: ${risk === 'HIGH' || risk === 'CONTRAINDICATED' ? '#EF4444' : (risk === 'MODERATE' ? '#EAB308' : '#10B981')};">${escapeHtml(risk)}</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Confidence</span>
+        <span class="data-value" style="color: ${confidence >= 80 ? '#10B981' : (confidence >= 50 ? '#EAB308' : '#EF4444')}; font-weight: 800;">${confidence}%</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Evidence</span>
+        <span class="data-value">${escapeHtml(evidence)}</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Primary Concern</span>
+        <span class="data-value">${escapeHtml(primaryConcern)}</span>
+      </div>
+    `;
+
+    els.resultDetailsBox.innerHTML = `
+      <div class="detail-block">
+        <div class="detail-title"><i data-lucide="shield"></i> Overall Assessment</div>
+        <div class="detail-text">${escapeHtml(overallAssessment)}</div>
+      </div>
+      <div class="detail-block">
+        <div class="detail-title"><i data-lucide="activity"></i> Therapeutic Compatibility</div>
+        <div class="detail-text">${escapeHtml(compatibility)}</div>
+      </div>
+      <div class="detail-block">
+        <div class="detail-title"><i data-lucide="pill"></i> Dosing Considerations</div>
+        <div class="detail-text">${escapeHtml(dosing)}</div>
+      </div>
+      ${monitoring.length > 0 ? `
+      <div class="detail-block">
+        <div class="detail-title"><i data-lucide="list-checks"></i> Monitoring Recommendations</div>
+        <div class="detail-text">
+          <ul style="margin: 0; padding-left: 16px; display: grid; gap: 6px;">
+            ${monitoring.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+          </ul>
+        </div>
+      </div>` : ''}
+      ${alternatives.length > 0 ? `
+      <div class="detail-block">
+        <div class="detail-title"><i data-lucide="stethoscope"></i> Alternative Recommendations</div>
+        <div class="detail-text">
+          <ul style="margin: 0; padding-left: 16px; display: grid; gap: 6px;">
+            ${alternatives.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+          </ul>
+        </div>
+      </div>` : ''}
+      <div class="detail-block">
+        <div class="detail-title"><i data-lucide="heart"></i> Patient Counseling</div>
+        <div class="detail-text">${escapeHtml(counseling)}</div>
+      </div>
+      <div class="detail-block" style="background: rgba(255, 255, 255, 0.01); border: 1px dashed rgba(255, 255, 255, 0.05);">
+        <div class="detail-text" style="font-size: 10px; opacity: 0.4; text-transform: uppercase; letter-spacing: 1px; font-family: 'JetBrains Mono', monospace;">
+          Ref: ${Date.now()} | Engine: ${result.engine || 'MedSwift Interaction AI'} | Latency: ${result.verifyMs ?? '—'}ms
+        </div>
+      </div>
+    `;
+
+    appState.set('lastResult', result);
+    els.resultCard.classList.remove('hidden');
+    lucide.createIcons();
+    return;
+  }
+
   const isOk     = result.authentic === true;
   const isManual = result.manualReviewRequired === true;
   const isLow    = !isOk && !isManual;

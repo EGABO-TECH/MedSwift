@@ -193,17 +193,27 @@ export default async function handler(req, res) {
     // ─── STAGE 2: MULTI-PROVIDER RESILIENCE PIPELINE ───
     let prompt = '';
     if (mode === 'report') {
-      prompt = `You are a clinical documentation assistant. Analyze the image of a written medical report and rewrite it into a concise, understandable medical report.
-Label context: "${extractedText}"
-Your task is to summarize the report clearly for a pharmacist or clinician. Return a JSON object with:
-- title (short, professional title)
-- summary (1-2 concise paragraphs that explain the main point in plain language)
-- keyFindings (array of short bullets capturing the major findings)
-- recommendations (array of short actionable recommendations)
-- followUp (one short sentence for follow-up or next steps)
-- confidenceScore (0-100)
+      prompt = `You are a senior clinical documentation assistant. Analyze the doctor's written note below and rewrite it into a concise, clinically useful summary.
+
+Rules:
+- Use only the supplied text as your evidence source.
+- Do not invent findings, medications, diagnoses, or diagnoses that are not stated in the note.
+- If information is missing, say "Not stated in the provided note."
+- Prefer short, plain-language, high-signal wording intended for a clinician or pharmacist.
+- Return no prose outside the JSON object.
+
+Source note:
+"${extractedText}"
+
+Return ONLY a raw JSON object with exactly these keys:
+- title (short, professional title, 5-8 words max)
+- summary (2 short sentences summarizing the main point clearly)
+- keyFindings (array of 3-5 short bullet points)
+- recommendations (array of 2-4 practical next steps)
+- followUp (1 short sentence for follow-up)
+- confidenceScore (0-100, based on how clearly the note supports the summary)
 - sourceContext (brief note on the document type or context)
-Return ONLY the raw JSON object.`;
+`;
     } else if (mode === 'interaction') {
       const medsList = medications.map((med, idx) =>
         `${idx + 1}. ${med.drugName || 'Unknown'} (${med.genericName || ''}) - ${med.indication || 'No indication provided'}`)
@@ -458,6 +468,11 @@ async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 20000);
 
+  const parts = [{ text: prompt }];
+  if (imageData) {
+    parts.push({ inline_data: { mime_type: mimeType, data: imageData } });
+  }
+
   let response;
   try {
     // CRITICAL FIX: Use v1beta endpoint — it supports ALL Gemini models
@@ -472,10 +487,7 @@ async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
         signal: ctrl.signal,
         body: JSON.stringify({
           contents: [{
-            parts: [
-              { text: prompt },
-              { inline_data: { mime_type: mimeType, data: imageData } }
-            ]
+            parts
           }],
           generationConfig: {
             temperature: 0.1,
@@ -529,6 +541,13 @@ async function callGemini(modelName, prompt, imageData, mimeType, apiKey) {
  * OpenRouter Multi-Model Call
  */
 async function callOpenRouter(modelName, prompt, imageData, mimeType, apiKey) {
+  const content = imageData
+    ? [
+        { "type": "text", "text": prompt },
+        { "type": "image_url", "image_url": { "url": `data:${mimeType};base64,${imageData}` } }
+      ]
+    : prompt;
+
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -542,10 +561,7 @@ async function callOpenRouter(modelName, prompt, imageData, mimeType, apiKey) {
       "messages": [
         {
           "role": "user",
-          "content": [
-            { "type": "text", "text": prompt },
-            { "type": "image_url", "image_url": { "url": `data:${mimeType};base64,${imageData}` } }
-          ]
+          "content": content
         }
       ],
       "response_format": { "type": "json_object" }
@@ -578,6 +594,13 @@ async function callOpenRouter(modelName, prompt, imageData, mimeType, apiKey) {
  * For services like NVIDIA NIM, DeepSeek, Groq, SambaNova, Fireworks AI, etc.
  */
 async function callOpenAICompatible(modelName, prompt, imageData, mimeType, apiKey, baseUrl, isSpecial = false) {
+  const content = imageData
+    ? [
+        { "type": "text", "text": prompt },
+        { "type": "image_url", "image_url": { "url": `data:${mimeType};base64,${imageData}` } }
+      ]
+    : prompt;
+
   // Special handling for Cohere which has a different API structure
   if (isSpecial && modelName.includes('command')) {
     // Cohere API call
