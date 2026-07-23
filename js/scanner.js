@@ -221,15 +221,16 @@ export async function identifyMedication(base64Image, signal, mode = 'medication
     const visionResult = await response.json();
 
     if (mode === 'report') {
+      const confidence = Number(visionResult.confidenceScore ?? 0);
       const finalResult = {
         ...visionResult,
-        authentic:            (visionResult.confidenceScore ?? 0) >= 70,
-        manualReviewRequired: (visionResult.confidenceScore ?? 0) > 0 && (visionResult.confidenceScore ?? 0) < 70,
+        authentic:            false,
+        manualReviewRequired: confidence > 0 && confidence < 80,
         verifyMs:             Math.round(performance.now() - startTime),
         timestamp:            new Date().toISOString()
       };
 
-      if ((finalResult.confidenceScore ?? 0) >= 90) {
+      if (confidence >= 90) {
         await cacheVisualSignature(imageHash, finalResult);
       }
 
@@ -239,6 +240,8 @@ export async function identifyMedication(base64Image, signal, mode = 'medication
     // 3. Local RxNorm/openFDA Cross-Reference Validation
     const localRef = await validateWithLocalDB(visionResult.drugName, visionResult.genericName);
 
+    const confidence = Number(visionResult.confidenceScore ?? 0);
+    const hasStrongIdentifier = Boolean(visionResult.drugName && visionResult.manufacturer);
     const finalResult = {
       ...visionResult,
       // Enhance with our richer local DB data if we have a match
@@ -257,8 +260,8 @@ export async function identifyMedication(base64Image, signal, mode = 'medication
         isEssentialMedicine: visionResult.isEssentialMedicine ?? false,
         localDbMatch:       false
       }),
-      authentic:            (visionResult.confidenceScore ?? 0) >= 80 && visionResult.originVerified,
-      manualReviewRequired: (visionResult.confidenceScore ?? 0) > 0 && (visionResult.confidenceScore ?? 0) < 80,
+      authentic:            confidence >= 80 && hasStrongIdentifier && visionResult.originVerified === true,
+      manualReviewRequired: confidence > 0 && confidence < 80,
       verifyMs:             Math.round(performance.now() - startTime),
       timestamp:            new Date().toISOString()
     };

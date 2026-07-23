@@ -722,21 +722,30 @@ function showResultCard(result, mode = appState.get('analysisMode')) {
     if (isManual) els.resultCard.classList.add('manual-review');
     if (isLow)    els.resultCard.classList.add('unverified');
 
-    const confidence = result.confidenceScore ?? 0;
+    const confidence = Number(result.confidenceScore ?? 0);
     const confColor  = confidence >= 80 ? '#10B981' : (confidence >= 50 ? '#EAB308' : '#EF4444');
-    const titleText = result.title || 'Concise Medical Report';
-    const summary = result.summary || 'No concise summary was generated. Please review the source document directly.';
+    const titleText = result.title || 'Scanned Report Summary';
+    const summary = result.summary || 'No concise summary was generated from the scanned document.';
     const findings = Array.isArray(result.keyFindings) && result.keyFindings.length > 0 ? result.keyFindings : [];
     const recommendations = Array.isArray(result.recommendations) && result.recommendations.length > 0 ? result.recommendations : [];
     const followUp = result.followUp || 'Discuss the findings with the treating clinician.';
+    const assessmentText = isOk
+      ? 'The current scan produced a high-confidence summary.'
+      : (isManual
+        ? 'This summary is provisional and should be reviewed by a clinician or pharmacist.'
+        : 'The available scan context did not produce a reliable match.');
 
     els.resultIcon.setAttribute('data-lucide', isOk ? 'file-check-2' : (isManual ? 'alert-circle' : 'file-warning'));
-    els.resultTitle.textContent = `Medical Report: ${titleText}`;
+    els.resultTitle.textContent = titleText;
 
     els.resultDataRows.innerHTML = `
       <div class="data-row">
         <span class="data-label">Document Type</span>
         <span class="data-value" style="font-family: 'Playfair Display', serif; font-size: 16px;">Written Medical Report</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Assessment</span>
+        <span class="data-value" style="font-size: 12px; color: ${confColor}; opacity: 0.95;">${escapeHtml(assessmentText)}</span>
       </div>
       <div class="data-row">
         <span class="data-label">Confidence</span>
@@ -752,6 +761,10 @@ function showResultCard(result, mode = appState.get('analysisMode')) {
       <div class="detail-block" style="border: 1px solid rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05);">
         <div class="detail-title" style="color: #10B981;"><i data-lucide="file-text"></i> Concise Summary</div>
         <div class="detail-text">${escapeHtml(summary)}</div>
+      </div>
+      <div class="detail-block" style="background: rgba(255, 255, 255, 0.01); border: 1px dashed rgba(255, 255, 255, 0.05);">
+        <div class="detail-title"><i data-lucide="shield-alert"></i> Evidence Status</div>
+        <div class="detail-text">${escapeHtml(assessmentText)}</div>
       </div>
       ${findings.length > 0 ? `
       <div class="detail-block">
@@ -799,18 +812,23 @@ function showResultCard(result, mode = appState.get('analysisMode')) {
 
   // Icon & Title
   const iconName  = isOk ? 'shield-check' : (isManual ? 'alert-circle' : 'shield-alert');
-  const titleText = isOk ? 'Authentic' : (isManual ? 'Manual Review' : 'Unverified');
+  const titleText = result.drugName || 'Unidentified medication';
+  const statusText = isOk ? 'Validated scan match' : (isManual ? 'Manual review required' : 'No confident medication match');
   els.resultIcon.setAttribute('data-lucide', iconName);
-  els.resultTitle.textContent = `Truth Report: ${titleText}`;
+  els.resultTitle.textContent = `Scanned product: ${titleText}`;
 
   // Core data rows
-  const confidence = result.confidenceScore ?? 0;
+  const confidence = Number(result.confidenceScore ?? 0);
   const confColor  = confidence >= 80 ? '#10B981' : (confidence >= 50 ? '#EAB308' : '#EF4444');
 
   els.resultDataRows.innerHTML = `
     <div class="data-row">
       <span class="data-label">Product Name</span>
-      <span class="data-value" style="font-family: 'Playfair Display', serif; font-size: 16px;">${escapeHtml(result.drugName || 'Unknown')}</span>
+      <span class="data-value" style="font-family: 'Playfair Display', serif; font-size: 16px;">${escapeHtml(titleText)}</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Assessment</span>
+      <span class="data-value" style="font-size: 12px; color: ${confColor}; opacity: 0.95;">${escapeHtml(statusText)}</span>
     </div>
     ${result.genericName ? `
     <div class="data-row">
@@ -1174,13 +1192,13 @@ async function generatePDFReport(result) {
   // 2. Prepare data with safe escaping
   const drugName       = escapeHtml(result.drugName || 'Unknown');
   const manufacturer   = escapeHtml(result.manufacturer || 'Unverified');
-  const origin         = result.originVerified ? 'Verified' : 'Unverified';
+  const origin         = result.originVerified ? 'Verified source metadata' : 'Source metadata not independently verified';
   const classification = escapeHtml(result.therapeuticClass || 'Uncategorized');
   const indication     = escapeHtml(result.indication || 'Symptom management');
   const dosage         = escapeHtml(result.dosageInstructions || 'Verify with a licensed pharmacist.');
   const nudge          = escapeHtml(result.lifestyleNudge || '');
-  const confidence     = result.confidenceScore || 0;
-  const status         = result.authentic ? 'AUTHENTIC' : 'UNVERIFIED';
+  const confidence     = Number(result.confidenceScore || 0);
+  const status         = result.authentic ? 'Validated scan match' : (result.manualReviewRequired ? 'Manual review required' : 'No confident match');
   const warnings       = escapeHtml(result.warnings || 'None detected.');
   const interaction    = escapeHtml(result.proactiveInsight || 'No known conflicts detected.');
   const refNo          = `MV-${Date.now()}`;
@@ -1199,7 +1217,7 @@ async function generatePDFReport(result) {
                 <td width="60" valign="middle">${logoTag}</td>
                 <td valign="middle" style="padding-left: 16px;">
                   <div style="font-size: 18px; font-weight: 700; color: #111; text-transform: uppercase; letter-spacing: 3px;">MedSwift Vision</div>
-                  <div style="font-size: 10px; color: #6B7280; text-transform: uppercase; letter-spacing: 2px; margin-top: 3px;">Truth Report</div>
+                  <div style="font-size: 10px; color: #6B7280; text-transform: uppercase; letter-spacing: 2px; margin-top: 3px;">Scan Assessment</div>
                 </td>
                 <td valign="middle" align="right">
                   <div style="font-size: 9px; color: #9CA3AF;">Ref: ${refNo}</div>
