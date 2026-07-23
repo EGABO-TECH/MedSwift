@@ -23,13 +23,48 @@ function normalizeText(text) {
   return String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function tokenize(text) {
+  return normalizeText(text).split(' ').filter(Boolean);
+}
+
+function chooseBestOfflineMatch(dataset, extractedText, medications = []) {
+  const sources = [
+    extractedText,
+    ...medications.map(m => `${m.drugName || ''} ${m.genericName || ''} ${m.manufacturer || ''}`).filter(Boolean)
+  ].filter(Boolean);
+
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const item of dataset) {
+    const itemSearchText = normalizeText(`${item.brandName || ''} ${item.genericName || ''} ${item.manufacturer || ''} ${item.dosageForm || ''}`);
+
+    for (const source of sources) {
+      const sourceText = normalizeText(source);
+      if (!sourceText) continue;
+
+      let score = 0;
+      if (itemSearchText.includes(sourceText)) score += 100;
+      if (sourceText.includes(itemSearchText)) score += 80;
+
+      const sourceTokens = tokenize(sourceText);
+      const matchTokens = sourceTokens.filter(token => itemSearchText.includes(token));
+      score += matchTokens.length * 12;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = item;
+      }
+    }
+  }
+
+  return bestScore > 0 ? bestMatch : null;
+}
+
 async function createOfflineFallbackResult(mode, extractedText, medications = []) {
   const dataset = await loadOfflineReferenceData();
-  const haystack = normalizeText(`${extractedText} ${medications.map(m => `${m.drugName || ''} ${m.genericName || ''}`).join(' ')}`);
-  const match = dataset.find(item => {
-    const candidates = [item.brandName, item.genericName, item.manufacturer, item.dosageForm];
-    return candidates.some(value => value && haystack.includes(normalizeText(value)));
-  }) || dataset[0] || null;
+  const match = chooseBestOfflineMatch(dataset, extractedText, medications);
+  const fallbackName = normalizeText(extractedText || medications.map(m => m.drugName || m.genericName).filter(Boolean).join(' '));
 
   if (mode === 'report') {
     return {
@@ -70,24 +105,28 @@ async function createOfflineFallbackResult(mode, extractedText, medications = []
     };
   }
 
+  const labelSource = (extractedText || medications.map(m => m.drugName || m.genericName).filter(Boolean).join(' ') || 'Medication').trim();
+
   return {
-    drugName: match?.brandName || 'Offline Medication Reference',
+    drugName: match?.brandName || labelSource || 'Medication',
     genericName: match?.genericName || '',
-    manufacturer: match?.manufacturer || 'Local Reference Matrix',
-    indication: match?.indication || match?.dosageForm || 'Offline reference verification only',
-    dosageInstructions: match?.dosageInstructions || 'Follow the label or pharmacist instructions.',
-    warnings: match?.warnings || 'Please confirm with a clinician before use.',
-    storage: match?.storage || 'Store as directed on the package.',
-    confidenceScore: 65,
+    manufacturer: match?.manufacturer || 'Unable to verify manufacturer from local matrix',
+    indication: match?.indication || match?.dosageForm || 'Medication details could not be fully verified by the external intelligence layer.',
+    dosageInstructions: match?.dosageInstructions || 'No dosage guidance can be confirmed because the drug could not be confidently matched in the offline reference set.',
+    warnings: match?.warnings || 'No reliable medication warning data was available from the offline reference path.',
+    storage: match?.storage || 'Package storage could not be confirmed offline.',
+    confidenceScore: match ? 65 : 20,
     originVerified: false,
-    confidenceRationale: 'The network intelligence layer is unavailable, so MedSwift is using the device’s offline medication matrix for continuity.',
-    regulatoryStatus: match?.regulatoryStatus || 'Offline reference only',
+    confidenceRationale: match
+      ? 'The network intelligence layer is unavailable, so MedSwift is using the closest matching local medication reference for continuity.'
+      : 'The drug could not be matched to the local reference matrix. MedSwift is not inventing medication guidance and is returning only the extracted label context available in the request.',
+    regulatoryStatus: match?.regulatoryStatus || 'Unavailable in offline fallback',
     therapeuticClass: match?.therapeuticClass || '',
     pathway: match?.pathway || '',
     isEssentialMedicine: match?.isEssentialMedicine ?? false,
-    lifestyleNudge: match?.lifestyleNudge || 'Please use the package labeling and a licensed pharmacist as the current source of truth until network-backed verification returns.',
+    lifestyleNudge: match?.lifestyleNudge || 'Use the product label and a licensed pharmacist or clinician as the current source of truth until network-backed verification returns.',
     suggestedBiomarkers: match?.suggestedBiomarkers || [],
-    proactiveInsight: match?.proactiveInsight || 'Offline fallback mode is active to keep the PWA usable.',
+    proactiveInsight: match?.proactiveInsight || 'Offline fallback mode is active. No unsupported clinical guidance is being generated.',
     authentic: false,
     manualReviewRequired: true,
     offlineFallback: true,
