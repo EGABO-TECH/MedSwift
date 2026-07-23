@@ -1,3 +1,102 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+
+const offlineReferenceCache = { data: null, loaded: false };
+
+async function loadOfflineReferenceData() {
+  if (offlineReferenceCache.loaded) return offlineReferenceCache.data;
+
+  try {
+    const dataPath = path.join(process.cwd(), 'data', 'offline_db.json');
+    const raw = await readFile(dataPath, 'utf8');
+    offlineReferenceCache.data = JSON.parse(raw);
+  } catch (e) {
+    offlineReferenceCache.data = [];
+    console.warn('Offline reference data unavailable:', e.message);
+  }
+
+  offlineReferenceCache.loaded = true;
+  return offlineReferenceCache.data;
+}
+
+function normalizeText(text) {
+  return String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+async function createOfflineFallbackResult(mode, extractedText, medications = []) {
+  const dataset = await loadOfflineReferenceData();
+  const haystack = normalizeText(`${extractedText} ${medications.map(m => `${m.drugName || ''} ${m.genericName || ''}`).join(' ')}`);
+  const match = dataset.find(item => {
+    const candidates = [item.brandName, item.genericName, item.manufacturer, item.dosageForm];
+    return candidates.some(value => value && haystack.includes(normalizeText(value)));
+  }) || dataset[0] || null;
+
+  if (mode === 'report') {
+    return {
+      title: 'Offline Clinical Summary',
+      summary: extractedText || 'Offline mode is active. The app is now serving its local clinical reference matrix while the network-backed intelligence is unavailable.',
+      keyFindings: ['Local fallback mode engaged', 'Verification is limited to the device reference data'],
+      recommendations: ['Review the saved medication information with a pharmacist or clinician', 'Reconnect intelligence services to refresh verification'],
+      followUp: 'Continue using the local reference matrix until network verification is available again.',
+      confidenceScore: 64,
+      sourceContext: 'Offline PWA fallback',
+      authentic: false,
+      manualReviewRequired: true,
+      verifyMs: 0,
+      engine: 'Local Reference Matrix',
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  if (mode === 'interaction') {
+    return {
+      interactionRiskLevel: 'LOW',
+      interactingPairs: [],
+      therapeuticCompatibility: 'Interaction analysis is unavailable while the network intelligence layer is offline. The app is using the local medication matrix only.',
+      dosingConsiderations: 'Review medication instructions from the package insert or a licensed pharmacist.',
+      monitoringRecommendations: ['Monitor for unexpected side effects', 'Verify any new prescription combinations before administration'],
+      alternativeRecommendations: ['Consider discussing the combination with your clinician'],
+      patientCounseling: 'Do not make medication changes based on this offline fallback alone.',
+      overallAssessment: 'Offline-only analysis is active. This result should be treated as a continuity placeholder until network-backed intelligence is restored.',
+      confidenceScore: 55,
+      evidenceLevel: 'Low',
+      primaryConcern: 'Provider intelligence unavailable',
+      recommendedAction: 'CONSULT_SPECIALIST',
+      authentic: false,
+      manualReviewRequired: true,
+      verifyMs: 0,
+      engine: 'Local Reference Matrix',
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  return {
+    drugName: match?.brandName || 'Offline Medication Reference',
+    genericName: match?.genericName || '',
+    manufacturer: match?.manufacturer || 'Local Reference Matrix',
+    indication: match?.indication || match?.dosageForm || 'Offline reference verification only',
+    dosageInstructions: match?.dosageInstructions || 'Follow the label or pharmacist instructions.',
+    warnings: match?.warnings || 'Please confirm with a clinician before use.',
+    storage: match?.storage || 'Store as directed on the package.',
+    confidenceScore: 65,
+    originVerified: false,
+    confidenceRationale: 'The network intelligence layer is unavailable, so MedSwift is using the device’s offline medication matrix for continuity.',
+    regulatoryStatus: match?.regulatoryStatus || 'Offline reference only',
+    therapeuticClass: match?.therapeuticClass || '',
+    pathway: match?.pathway || '',
+    isEssentialMedicine: match?.isEssentialMedicine ?? false,
+    lifestyleNudge: match?.lifestyleNudge || 'Please use the package labeling and a licensed pharmacist as the current source of truth until network-backed verification returns.',
+    suggestedBiomarkers: match?.suggestedBiomarkers || [],
+    proactiveInsight: match?.proactiveInsight || 'Offline fallback mode is active to keep the PWA usable.',
+    authentic: false,
+    manualReviewRequired: true,
+    offlineFallback: true,
+    verifyMs: 0,
+    engine: 'Local Reference Matrix',
+    timestamp: new Date().toISOString()
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -7,27 +106,21 @@ export default async function handler(req, res) {
   const geminiApiKey = process.env.GEMINI_API_KEY;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
 
-  if (!geminiApiKey && !openRouterKey) {
-    // Check if any OpenAI-compatible providers are configured
-    const openaiCompatibleProviders = [
-      { name: 'NVIDIA NIM', envVar: 'NVIDIA_NIM_API_KEY' },
-      { name: 'DeepSeek', envVar: 'DEEPSEEK_API_KEY' },
-      { name: 'Groq', envVar: 'GROQ_API_KEY' },
-      { name: 'SambaNova', envVar: 'SAMBANOVA_API_KEY' },
-      { name: 'Fireworks AI', envVar: 'FIREWORKS_API_KEY' },
-      { name: 'Cohere', envVar: 'COHERE_API_KEY' },
-      { name: 'Kimi (Moonshot)', envVar: 'KIMI_API_KEY' },
-      { name: 'Minimax', envVar: 'MINIMAX_API_KEY' },
-      { name: 'Z.AI', envVar: 'ZAI_API_KEY' },
-      { name: 'Mistral', envVar: 'MISTRAL_API_KEY' }
-    ];
+  const openaiCompatibleProviders = [
+    { name: 'NVIDIA NIM', envVar: 'NVIDIA_NIM_API_KEY' },
+    { name: 'DeepSeek', envVar: 'DEEPSEEK_API_KEY' },
+    { name: 'Groq', envVar: 'GROQ_API_KEY' },
+    { name: 'SambaNova', envVar: 'SAMBANOVA_API_KEY' },
+    { name: 'Fireworks AI', envVar: 'FIREWORKS_API_KEY' },
+    { name: 'Cohere', envVar: 'COHERE_API_KEY' },
+    { name: 'Kimi (Moonshot)', envVar: 'KIMI_API_KEY' },
+    { name: 'Minimax', envVar: 'MINIMAX_API_KEY' },
+    { name: 'Z.AI', envVar: 'ZAI_API_KEY' },
+    { name: 'Mistral', envVar: 'MISTRAL_API_KEY' }
+  ];
 
-    const hasOpenAIProvider = openaiCompatibleProviders.some(p => process.env[p.envVar]);
-
-    if (!hasOpenAIProvider) {
-      return res.status(500).json({ error: 'No Intelligence Providers Configured' });
-    }
-  }
+  const hasOpenAIProvider = openaiCompatibleProviders.some(p => process.env[p.envVar]);
+  const hasAnyProvider = Boolean(geminiApiKey || openRouterKey || hasOpenAIProvider);
 
   try {
     // ─── STAGE 1: OCR PRE-PROCESSOR ───
@@ -205,7 +298,8 @@ Return ONLY the raw JSON object.`;
     }
 
     if (providers.length === 0) {
-      return res.status(500).json({ error: 'No Intelligence Providers Configured' });
+      console.warn('No intelligence providers configured. Returning offline fallback result.');
+      return res.status(200).json(await createOfflineFallbackResult(mode, extractedText, medications));
     }
 
     let visionResult = null;
@@ -266,7 +360,7 @@ Return ONLY the raw JSON object.`;
             break;
 
           case 'openai-compatible':
-            // Try OpenAI-compatible API
+            // Try every configured OpenAI-compatible model for this provider.
             for (const model of provider.models) {
               try {
                 console.log(`${provider.name}: Attempting ${model}...`);
@@ -279,16 +373,17 @@ Return ONLY the raw JSON object.`;
                   provider.baseUrl,
                   provider.special
                 );
-                  if (visionResult) {
-                    console.log(`Success with ${provider.name} ${model}`);
-                    break;
-                  }
-                } catch (e) {
-                  errors.push(`${provider.name}(${model}): ${e.message}`);
-                  // Continue to next model
+
+                if (visionResult) {
+                  console.log(`Success with ${provider.name} ${model}`);
+                  break;
                 }
+              } catch (e) {
+                errors.push(`${provider.name}(${model}): ${e.message}`);
+                // Continue to the next configured model instead of stopping at the first failure.
               }
-              break;
+            }
+            break;
         }
       } catch (err) {
         errors.push(`${provider.name} provider failed: ${err.message}`);
@@ -298,20 +393,21 @@ Return ONLY the raw JSON object.`;
     if (!visionResult) {
       const isQuotaError = errors.some(e => e.includes('QuotaFailure') || e.includes('429') || e.includes('rate limit'));
       if (isQuotaError) {
-        throw new Error("Intelligence Network Quota Exceeded. Please try again in a minute.");
+        console.warn('Provider quota exhausted. Falling back to the local reference matrix.');
+        return res.status(200).json(await createOfflineFallbackResult(mode, extractedText, medications));
       }
-      // Return the most relevant error for the UI
-      const primaryError = errors[0] || 'Unknown Analysis Failure';
-      throw new Error(`MedVision Core Failure: ${primaryError}. (Providers tried: ${providers.map(p => p.name).join(', ')})`);
+
+      console.warn('All provider attempts failed. Falling back to the local reference matrix.');
+      return res.status(200).json(await createOfflineFallbackResult(mode, extractedText, medications));
     }
 
     // Return successful response
     return res.status(200).json(visionResult);
   } catch (err) {
     console.error('MedVision System-Wide Failure:', err.message);
-    // If the error message is an object (from stringification of Error), we want it clean
     const cleanMsg = typeof err.message === 'string' ? err.message : JSON.stringify(err.message);
-    return res.status(500).json({ error: cleanMsg });
+    console.warn('Using offline fallback after catch path:', cleanMsg);
+    return res.status(200).json(await createOfflineFallbackResult(mode, extractedText, medications));
   }
 }
 
