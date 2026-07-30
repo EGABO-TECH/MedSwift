@@ -27,6 +27,55 @@ function tokenize(text) {
   return normalizeText(text).split(' ').filter(Boolean);
 }
 
+function compactClinicalText(value, fallback = 'Not stated in the provided note.', maxWords = 24) {
+  const raw = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return fallback;
+
+  const cleaned = raw
+    .replace(/^[-•*]\s*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned) return fallback;
+
+  const words = cleaned.split(/\s+/);
+  if (words.length <= maxWords) return cleaned;
+
+  return `${words.slice(0, maxWords).join(' ')}…`;
+}
+
+function normalizeReportResult(result, sourceText = '') {
+  const fallbackSummary = sourceText
+    ? 'No clinically relevant findings were stated in the provided note.'
+    : 'No clinically relevant findings were stated in the provided note.';
+
+  const normalizeList = (items, fallbackText) => {
+    const cleaned = (Array.isArray(items) ? items : [])
+      .map(item => String(item || '').replace(/^[-•*\d.]+\s*/, '').replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+      .slice(0, 3);
+
+    return cleaned.length > 0 ? cleaned : [fallbackText];
+  };
+
+  return {
+    ...result,
+    title: String(result?.title || 'Clinical Report Summary').replace(/\s+/g, ' ').trim().slice(0, 60),
+    summary: compactClinicalText(result?.summary, fallbackSummary, 24),
+    keyFindings: normalizeList(result?.keyFindings, fallbackSummary),
+    recommendations: normalizeList(result?.recommendations, 'Discuss the findings with the treating clinician.'),
+    followUp: compactClinicalText(result?.followUp, 'Follow up with the treating clinician or specialist as appropriate.', 14),
+    sourceContext: compactClinicalText(result?.sourceContext, 'Scanned clinical document', 10)
+  };
+}
+
+function finalizeResultForMode(result, mode, sourceText) {
+  if (mode === 'report') {
+    return normalizeReportResult(result, sourceText);
+  }
+  return result;
+}
+
 function chooseBestOfflineMatch(dataset, extractedText, medications = []) {
   const sources = [
     extractedText,
@@ -197,20 +246,22 @@ export default async function handler(req, res) {
 
 Rules:
 - Use only the supplied text as your evidence source.
-- Do not invent findings, medications, diagnoses, or diagnoses that are not stated in the note.
+- Do not invent findings, diagnoses, medications, tests, or follow-up actions that are not stated in the note.
+- Ignore boilerplate, repeated labels, page headers, and non-clinical wording unless it changes care.
+- Focus only on the clinically relevant facts: diagnosis, symptoms, findings, medications, tests, and follow-up actions.
 - If information is missing, say "Not stated in the provided note."
-- Prefer short, plain-language, high-signal wording intended for a clinician or pharmacist.
+- Keep the output extremely concise and useful for a clinician or pharmacist.
 - Return no prose outside the JSON object.
 
 Source note:
 "${extractedText}"
 
 Return ONLY a raw JSON object with exactly these keys:
-- title (short, professional title, 5-8 words max)
-- summary (2 short sentences summarizing the main point clearly)
-- keyFindings (array of 3-5 short bullet points)
-- recommendations (array of 2-4 practical next steps)
-- followUp (1 short sentence for follow-up)
+- title (short professional title, 3-6 words max)
+- summary (1-2 short sentences, no more than 24 words total)
+- keyFindings (array of 2-3 very short bullet points, each under 10 words)
+- recommendations (array of 1-2 short next steps, each under 10 words)
+- followUp (1 short sentence for follow-up, under 12 words)
 - confidenceScore (0-100, based on how clearly the note supports the summary)
 - sourceContext (brief note on the document type or context)
 `;
@@ -348,7 +399,8 @@ Return ONLY the raw JSON object.`;
 
     if (providers.length === 0) {
       console.warn('No intelligence providers configured. Returning offline fallback result.');
-      return res.status(200).json(await createOfflineFallbackResult(mode, extractedText, medications));
+      const fallbackResult = await createOfflineFallbackResult(mode, extractedText, medications);
+      return res.status(200).json(finalizeResultForMode(fallbackResult, mode, extractedText));
     }
 
     let visionResult = null;
@@ -443,7 +495,8 @@ Return ONLY the raw JSON object.`;
       const isQuotaError = errors.some(e => e.includes('QuotaFailure') || e.includes('429') || e.includes('rate limit'));
       if (isQuotaError) {
         console.warn('Provider quota exhausted. Falling back to the local reference matrix.');
-        return res.status(200).json(await createOfflineFallbackResult(mode, extractedText, medications));
+        const fallbackResult = await createOfflineFallbackResult(mode, extractedText, medications);
+        return res.status(200).json(finalizeResultForMode(fallbackResult, mode, extractedText));
       }
 
       console.warn('All provider attempts failed. Falling back to the local reference matrix.');
@@ -451,12 +504,13 @@ Return ONLY the raw JSON object.`;
     }
 
     // Return successful response
-    return res.status(200).json(visionResult);
+    return res.status(200).json(finalizeResultForMode(visionResult, mode, extractedText));
   } catch (err) {
     console.error('MedVision System-Wide Failure:', err.message);
     const cleanMsg = typeof err.message === 'string' ? err.message : JSON.stringify(err.message);
     console.warn('Using offline fallback after catch path:', cleanMsg);
-    return res.status(200).json(await createOfflineFallbackResult(mode, extractedText, medications));
+    const fallbackResult = await createOfflineFallbackResult(mode, extractedText, medications);
+    return res.status(200).json(finalizeResultForMode(fallbackResult, mode, extractedText));
   }
 }
 
