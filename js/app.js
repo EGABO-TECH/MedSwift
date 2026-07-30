@@ -729,6 +729,8 @@ function showResultCard(result, mode = appState.get('analysisMode')) {
     const findings = Array.isArray(result.keyFindings) && result.keyFindings.length > 0 ? result.keyFindings : [];
     const recommendations = Array.isArray(result.recommendations) && result.recommendations.length > 0 ? result.recommendations : [];
     const followUp = result.followUp || 'Discuss the findings with the treating clinician.';
+    const compactFindings = findings.slice(0, 3);
+    const compactRecommendations = recommendations.slice(0, 2);
     const assessmentText = isOk
       ? 'The current scan produced a high-confidence summary.'
       : (isManual
@@ -762,25 +764,21 @@ function showResultCard(result, mode = appState.get('analysisMode')) {
         <div class="detail-title" style="color: #10B981;"><i data-lucide="file-text"></i> Concise Summary</div>
         <div class="detail-text">${escapeHtml(summary)}</div>
       </div>
-      <div class="detail-block" style="background: rgba(255, 255, 255, 0.01); border: 1px dashed rgba(255, 255, 255, 0.05);">
-        <div class="detail-title"><i data-lucide="shield-alert"></i> Evidence Status</div>
-        <div class="detail-text">${escapeHtml(assessmentText)}</div>
-      </div>
-      ${findings.length > 0 ? `
+      ${compactFindings.length > 0 ? `
       <div class="detail-block">
         <div class="detail-title"><i data-lucide="list-checks"></i> Key Findings</div>
         <div class="detail-text">
           <ul style="margin: 0; padding-left: 16px; display: grid; gap: 6px;">
-            ${findings.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+            ${compactFindings.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
           </ul>
         </div>
       </div>` : ''}
-      ${recommendations.length > 0 ? `
+      ${compactRecommendations.length > 0 ? `
       <div class="detail-block">
-        <div class="detail-title"><i data-lucide="stethoscope"></i> Recommendations</div>
+        <div class="detail-title"><i data-lucide="stethoscope"></i> Next Steps</div>
         <div class="detail-text">
           <ul style="margin: 0; padding-left: 16px; display: grid; gap: 6px;">
-            ${recommendations.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+            ${compactRecommendations.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
           </ul>
         </div>
       </div>` : ''}
