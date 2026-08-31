@@ -6,7 +6,7 @@
 
 ---
 
-**MedSwift** is an enterprise-grade **Multimodal Pharmaceutical Intelligence Engine** and Progressive Web App (PWA) designed to eliminate medication uncertainty. Engineered for clinical accuracy, MedSwift transforms the mobile camera into a high-precision auditing tool—verifying drug identity, auditing supply chain origin, and extracting life-saving clinical intelligence in real-time.
+**MedSwift** is an enterprise-grade **Multimodal Pharmaceutical Intelligence Engine** and Progressive Web App (PWA) designed to eliminate medication uncertainty. Engineered for clinical accuracy, MedSwift transforms the mobile camera into a high-precision auditing tool for verifying drug identity, auditing supply chain origin, and extracting life-saving clinical intelligence in real-time.
 
 [![Deployment: Vercel](https://img.shields.io/badge/Deployment-Vercel-black?style=flat-square&logo=vercel)](https://vercel.com)
 [![Intelligence: Gemini 1.5 Flash](https://img.shields.io/badge/Intelligence-Gemini%201.5%20Flash-blue?style=flat-square&logo=google-gemini)](https://deepmind.google/technologies/gemini/)
